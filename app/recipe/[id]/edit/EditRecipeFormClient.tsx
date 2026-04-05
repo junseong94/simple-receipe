@@ -10,6 +10,7 @@ import type { RecipeFormValues } from "@/lib/recipes/schema";
 interface EditRecipeFormClientProps {
   recipeId: string;
   recipe: Recipe;
+  authorName?: string;
 }
 
 /**
@@ -24,6 +25,7 @@ interface EditRecipeFormClientProps {
 export default function EditRecipeFormClient({
   recipeId,
   recipe,
+  authorName = "",
 }: EditRecipeFormClientProps) {
   const [pendingValues, setPendingValues] = useState<RecipeFormValues | null>(
     null,
@@ -31,7 +33,7 @@ export default function EditRecipeFormClient({
 
   // RecipeForm의 defaultValues로 변환
   const defaultValues: Partial<RecipeFormValues> = {
-    authorName: recipe.channelName || "",
+    authorName: authorName,
     name: recipe.name,
     cuisine: recipe.cuisine,
     difficulty: recipe.difficulty,

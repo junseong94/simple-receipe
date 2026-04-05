@@ -40,13 +40,14 @@ export async function verifyAndDelete(
     return { error: "비밀번호가 올바르지 않습니다." };
   }
 
-  // 3. 삭제
-  const { error: deleteError } = await supabase
+  // 3. 삭제 (영향 행 확인)
+  const { data: deleted, error: deleteError } = await supabase
     .from("user_recipes")
     .delete()
-    .eq("id", recipeId);
+    .eq("id", recipeId)
+    .select("id");
 
-  if (deleteError) {
+  if (deleteError || !deleted?.length) {
     console.error("[verifyAndDelete] Supabase delete error:", deleteError);
     return { error: "삭제에 실패했습니다. 잠시 후 다시 시도해주세요." };
   }

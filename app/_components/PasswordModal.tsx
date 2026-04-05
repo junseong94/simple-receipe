@@ -29,8 +29,12 @@ export default function PasswordModal({
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isPending, setIsPending] = useState(false);
+  const [failCount, setFailCount] = useState(0);
+  const [lockedUntil, setLockedUntil] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+
+  const isLocked = lockedUntil !== null && Date.now() < lockedUntil;
 
   // 모달 오픈 시 입력 포커스
   useEffect(() => {
@@ -61,17 +65,31 @@ export default function PasswordModal({
       setError("비밀번호를 입력해주세요");
       return;
     }
+    if (isLocked) {
+      setError("너무 많은 시도가 있었습니다. 잠시 후 다시 시도해주세요.");
+      return;
+    }
 
     setError("");
     setIsPending(true);
     try {
       const result = await onConfirm(password);
       if (result && "error" in result && result.error) {
-        setError(result.error);
+        const nextFail = failCount + 1;
+        setFailCount(nextFail);
+        if (nextFail >= 5) {
+          setLockedUntil(Date.now() + 60_000); // 1분 잠금
+          setError("5회 실패. 1분 후 다시 시도해주세요.");
+          setTimeout(() => {
+            setLockedUntil(null);
+            setFailCount(0);
+          }, 60_000);
+        } else {
+          setError(result.error);
+        }
         setPassword("");
         inputRef.current?.focus();
       }
-      // 성공 시 onConfirm 내부에서 redirect/cleanup 처리
     } catch {
       setError("처리 중 오류가 발생했습니다. 다시 시도해주세요.");
     } finally {

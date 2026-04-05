@@ -68,6 +68,7 @@ export default async function EditRecipePage({ params }: PageProps) {
   }
 
   const recipe = rowToRecipe(row as Record<string, unknown>);
+  const authorName = (row as Record<string, unknown>).author_name as string ?? "";
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50 dark:bg-gray-950">
@@ -105,7 +106,7 @@ export default async function EditRecipePage({ params }: PageProps) {
           수정 후 비밀번호 확인을 거쳐 저장됩니다.
         </p>
 
-        <EditRecipeFormClient recipeId={id} recipe={recipe} />
+        <EditRecipeFormClient recipeId={id} recipe={recipe} authorName={authorName} />
       </main>
     </div>
   );
