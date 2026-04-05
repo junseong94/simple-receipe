@@ -14,6 +14,10 @@ interface YouTubeEmbedProps {
  * - https://youtu.be/VIDEO_ID
  * - https://www.youtube.com/embed/VIDEO_ID
  */
+function isValidVideoId(id: string): boolean {
+  return /^[A-Za-z0-9_-]{11}$/.test(id);
+}
+
 function extractVideoId(url: string): string | null {
   const patterns = [
     /[?&]v=([^&#]+)/,
@@ -23,7 +27,7 @@ function extractVideoId(url: string): string | null {
 
   for (const pattern of patterns) {
     const match = url.match(pattern);
-    if (match?.[1]) {
+    if (match?.[1] && isValidVideoId(match[1])) {
       return match[1];
     }
   }
