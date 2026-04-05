@@ -61,11 +61,13 @@ export function filterStaticRecipes(
 export function getCuisineCounts(
   userIngredients: string[],
 ): Record<CuisineType, number> {
+  // 한 번만 스코어링 후 cuisine별 그룹핑 (4회 반복 호출 방지)
+  const all = filterStaticRecipes(userIngredients);
   const cuisines: CuisineType[] = ["korean", "chinese", "japanese", "western"];
   const counts = {} as Record<CuisineType, number>;
 
   for (const cuisine of cuisines) {
-    counts[cuisine] = filterStaticRecipes(userIngredients, [cuisine]).length;
+    counts[cuisine] = all.filter((s) => s.recipe.cuisine === cuisine).length;
   }
 
   return counts;

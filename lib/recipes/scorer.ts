@@ -22,7 +22,7 @@ import type { Recipe, ScoredRecipe } from "@/lib/recipes/types";
  * extractIngredientName("상추")           // → "상추"
  * extractIngredientName("애호박 반개")    // → "애호박"
  */
-function extractIngredientName(raw: string): string {
+export function extractIngredientName(raw: string): string {
   const normalized = normalizeIngredient(raw);
 
   // 수량/단위 패턴 제거: 숫자 + 단위(g, kg, ml, L, 개, 컵, T, t, 장, 인분, 대, 모, 약간, 조금 등)
@@ -60,7 +60,7 @@ export function scoreRecipe(
 ): ScoredRecipe {
   // 1. 사용자 재료 정규화 (매칭 성능을 위해 미리 처리)
   const normalizedUserIngredients = userIngredients.map((i) =>
-    normalizeIngredient(i),
+    extractIngredientName(i),
   );
 
   // 2. 필수 재료(ingredients)만 대상으로 매칭
