@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: recipe_user
       POSTGRES_PASSWORD: recipe_pass
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./supabase/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
