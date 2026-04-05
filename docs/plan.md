@@ -230,3 +230,96 @@ Phase 5 (폴리싱 + 배포)
 
 > Phase 1~3은 순차 진행. Phase 4는 피드백 후 진행.
 > Phase 5는 Phase 4와 병렬 가능 (반응형/다크모드는 Phase 3 이후 바로 시작 가능).
+
+---
+
+## v1.1 사용자 피드백 반영 — 추가 구현 계획
+
+> 기준 문서: [specification.md v1.1](./specification.md) | [feedback-action-plan.md](./feedback-action-plan.md)
+> 피드백 일시: 2026-04-05
+> 피드백 출처: 프로토타입 직접 사용 테스트
+
+---
+
+### 1차 스프린트 (Must + Should 핵심) — 예상 5시간
+
+#### Sprint 1-1. 검색 정확도 수정 [M-01]
+- [ ] `lib/recipes/search.ts` — `matchRatio > 0` 필터 추가
+  - `filterStaticRecipes()`: `scored.matchRatio > 0` AND 조건 추가
+  - `getCuisineCounts()`: 동일 필터 적용 (Step 2 수치와 Step 3 결과 일치)
+- [ ] 검증: "삼겹살" 1개 선택 → 군만두, 다마고야끼 미노출 확인
+
+#### Sprint 1-2. 동의어 매핑 수정 [M-03]
+- [ ] `data/ingredients.json` — 달걀/계란 통합
+  - "달걀" 항목의 aliases에 "계란", "에그" 추가
+  - "계란" 독립 항목 제거 (있다면)
+  - PANTRY_STAPLES에 "달걀"과 "계란" 모두 포함 확인
+- [ ] 검증: `ingredientMatches("계란", "달걀")` === true
+
+#### Sprint 1-3. YouTube 임베드 수정 [M-02]
+- [ ] `app/_components/YouTubeEmbed.tsx` 리팩토링
+  - iframe에 `referrerPolicy="strict-origin-when-cross-origin"` 추가
+  - 썸네일 클릭 → iframe 활성화 패턴 (activated 상태)
+  - 초기: 썸네일 이미지 + 재생 버튼 오버레이
+  - 클릭 시: `?autoplay=1` 포함 iframe으로 교체
+  - videoId 추출 실패 시 "영상을 불러올 수 없습니다" fallback UI
+- [ ] `data/recipes.json` YouTube URL 유효성 검증 (삭제/비공개 영상 교체)
+
+#### Sprint 1-4. 재료 선택 안내 문구 [S-03]
+- [ ] `app/_components/HomeClient.tsx` Step 1에 안내 문구 추가
+  - "아래 버튼은 레시피에 자주 쓰이는 재료예요. 목록에 없는 재료는 아래에서 직접 입력할 수 있어요."
+  - bg-blue-50 rounded-lg 스타일
+
+#### Sprint 1-5. 라이트모드 FOUC 수정 [S-01]
+- [ ] `app/layout.tsx` — 테마 초기화 인라인 스크립트 삽입
+  - `<Script id="theme-init" strategy="beforeInteractive">` 사용
+  - localStorage 'theme' 키 읽어서 즉시 `.dark` 클래스 적용
+  - `<html>` 태그에 `suppressHydrationWarning` 추가
+
+**Sprint 1 검증**: `npx tsc --noEmit` + `npm run build` + 브라우저 테스트
+
+---
+
+### 2차 스프린트 (Should + Could) — 예상 9시간
+
+#### Sprint 2-1. PC 2패널 레이아웃 [S-02]
+- [ ] `app/_components/HomeClient.tsx` Step 3 레이아웃 수정
+  - `<main>` 너비: Step 1~2는 `max-w-lg`, Step 3는 `lg:max-w-5xl`
+  - 아코디언 펼침 영역: `lg:grid lg:grid-cols-2 lg:gap-6`
+  - 데스크톱: 좌=조리요약, 우=YouTube
+  - 모바일: 세로 스택 유지 (YouTube 위, 조리요약 아래)
+- [ ] 브레이크포인트: `lg` (1024px) 기준
+
+#### Sprint 2-2. 조리 단계 시간 정보 추가 [C-01]
+- [ ] `data/recipes.json` — 65개 레시피 steps 수정
+  - 가열/처리 단계에 시간 표현 추가
+  - "볶는다" → "중불에서 5~7분 볶는다"
+  - "끓인다" → "10분간 끓인다"
+  - "굽는다" → "앞뒤로 각 3~4분 굽는다"
+  - 기존 `steps: string[]` 타입 변경 없음
+
+#### Sprint 2-3. 재료 인기순 정렬 [C-02] (선택)
+- [ ] 레시피 데이터에서 재료 출현 빈도 계산
+- [ ] Step 1 재료 버튼을 빈도순으로 정렬
+- [ ] 또는 "최근 선택한 재료" 로컬 히스토리 기반 정렬
+
+**Sprint 2 검증**: 반응형 테스트 (모바일 375px, 데스크톱 1280px) + Lighthouse
+
+---
+
+### 의존성 그래프
+
+```
+Sprint 1-1 (matchRatio 필터) ← 독립
+Sprint 1-2 (동의어) ← 독립
+Sprint 1-3 (YouTube) ← 독립
+Sprint 1-4 (안내 문구) ← 독립
+Sprint 1-5 (FOUC) ← 독립
+   ↓ (모두 독립, 병렬 가능)
+Sprint 2-1 (PC 2패널) ← Sprint 1 완료 후
+Sprint 2-2 (시간 정보) ← 독립 (데이터 작업)
+Sprint 2-3 (인기순) ← Sprint 2-2 이후 권장
+```
+
+> Sprint 1의 5개 태스크는 모두 독립적이므로 병렬 워크트리로 동시 진행 가능.
+> Sprint 2-1(PC 레이아웃)은 Sprint 1의 YouTube 수정(1-3)이 완료된 후 진행 권장.

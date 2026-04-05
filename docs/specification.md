@@ -513,3 +513,325 @@ Tailwind CSS v4 기본 브레이크포인트 사용:
 ### Phase 6 (향후): API 확장
 - [ ] YouTube Data API v3 연동
 - [ ] LLM API 연동 (동적 레시피 추천)
+
+---
+
+## v1.1 기술 변경사항 (사용자 피드백 반영)
+
+> 기준일: 2026-04-05
+> 관련 PRD 섹션: [docs/prd.md — v1.1 사용자 피드백 반영](./prd.md)
+> 관련 분석 문서: [docs/feedback-action-plan.md](./feedback-action-plan.md)
+
+아래 변경사항은 MoSCoW 우선순위 순서로 기술한다. 각 항목은 독립적으로 작업 가능하며, 변경 대상 파일이 명시되어 있다.
+
+---
+
+### [M-01] 검색 필터 강화 — matchRatio > 0 조건 추가
+
+**변경 대상 파일**: `lib/recipes/search.ts`
+
+**변경 내용**:
+
+`filterStaticRecipes` 함수 내 필터링 조건에 `matchRatio > 0` 조건을 AND로 추가한다.
+
+```typescript
+// 변경 전
+const withinThreshold = scoredRecipes.filter(
+  (scored) => scored.missingCount <= MAX_MISSING_COUNT,
+);
+
+// 변경 후
+const withinThreshold = scoredRecipes.filter(
+  (scored) =>
+    scored.missingCount <= MAX_MISSING_COUNT &&
+    scored.matchRatio > 0,  // 선택 재료를 하나도 사용하지 않는 레시피 제외
+);
+```
+
+**추가 변경 범위**: `getCuisineCounts()` 함수에도 동일한 `matchRatio > 0` 필터를 적용한다. Step 2에서 표시되는 카테고리별 레시피 수가 Step 3 실제 결과 수와 일치해야 한다.
+
+**영향 범위**: `searchAllRecipes()` → `filterStaticRecipes()` → `getCuisineCounts()` 호출 체인 전체.
+
+**검증 명령**: 없음 (정적 JSON 기반 클라이언트 로직). 브라우저에서 "삼겹살" 1개 선택 후 군만두/다마고야끼 미노출 확인.
+
+---
+
+### [M-02] YouTube 임베드 수정 — referrerpolicy 추가 + 썸네일 fallback
+
+**변경 대상 파일**: `app/_components/YouTubeEmbed.tsx`
+
+**변경 내용 1 — iframe에 referrerpolicy 추가**:
+
+```typescript
+// 변경 전
+<iframe
+  src={embedUrl}
+  title={title ?? "YouTube 동영상"}
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  allowFullScreen
+  loading="lazy"
+  className="absolute inset-0 h-full w-full"
+/>
+
+// 변경 후
+<iframe
+  src={embedUrl}
+  title={title ?? "YouTube 동영상"}
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  allowFullScreen
+  loading="lazy"
+  referrerPolicy="strict-origin-when-cross-origin"
+  className="absolute inset-0 h-full w-full"
+/>
+```
+
+**변경 내용 2 — 썸네일 클릭 후 iframe 교체 패턴 적용**:
+
+컴포넌트에 `activated` 상태를 추가한다. 초기 렌더 시 썸네일 이미지와 재생 버튼을 표시하고, 클릭 시 `autoplay=1` 파라미터가 포함된 iframe으로 교체한다.
+
+```typescript
+// YouTubeEmbed.tsx 인터페이스 변경
+interface YouTubeEmbedProps {
+  url: string;
+  title?: string;
+  // thumbnailUrl은 없을 경우 https://img.youtube.com/vi/{videoId}/hqdefault.jpg 자동 사용
+}
+
+// 상태 추가
+const [activated, setActivated] = useState(false);
+
+// 렌더 분기
+if (!activated) {
+  // 썸네일 + 재생 버튼 오버레이
+  // 클릭 시 setActivated(true)
+} else {
+  // iframe src에 ?autoplay=1 포함
+}
+```
+
+**변경 내용 3 — videoId 추출 실패 시 에러 UI**:
+
+`extractVideoId(url)`가 null을 반환할 경우 "영상을 불러올 수 없습니다" 안내 텍스트를 렌더한다. 기존에 null 체크 없이 iframe을 렌더하는 경우 이를 수정한다.
+
+**새로 추가되는 타입/인터페이스**: 없음 (기존 인터페이스 확장).
+
+---
+
+### [M-03] 동의어 매핑 수정 — 달걀/계란 통합
+
+**변경 대상 파일**: `data/ingredients.json`
+
+**변경 내용**:
+
+`ingredients.json`에서 달걀과 계란이 별도 항목으로 등록된 경우 아래와 같이 하나로 통합한다.
+
+```json
+// 변경 후 (올바른 구조)
+{
+  "name": "달걀",
+  "aliases": ["계란", "에그", "달걀(계란)"],
+  "category": "pantry"
+}
+```
+
+`계란` 독립 항목이 존재한다면 제거한다. `buildSynonymMap()`이 이 항목을 순회할 때 "계란" → "달걀"과 "달걀" → "달걀" 양방향 매핑이 모두 생성된다.
+
+**검증**: `lib/ingredients/synonyms.ts`의 `ingredientMatches("계란", "달걀")` 반환값이 `true`여야 한다.
+
+**주의**: `app/page.tsx`의 `INGREDIENT_CATEGORIES`에 하드코딩된 `"계란"` 문자열은 변경하지 않는다. 동의어 맵에서 "계란" → "달걀"로 정규화되므로 버튼 텍스트를 바꿀 필요가 없다.
+
+---
+
+### [S-01] FOUC 제거 — 테마 초기화 인라인 스크립트
+
+**변경 대상 파일**: `app/layout.tsx`
+
+**변경 내용**:
+
+`<html>` 요소에 `suppressHydrationWarning`을 추가하고, `<head>` 내에 Next.js `<Script strategy="beforeInteractive">`로 테마 초기화 스크립트를 삽입한다.
+
+```typescript
+// app/layout.tsx 변경 후 핵심 구조
+import Script from "next/script";
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="ko" suppressHydrationWarning className={`...기존 클래스...`}>
+      <head>
+        <Script id="theme-init" strategy="beforeInteractive">{`
+          (function() {
+            try {
+              var stored = localStorage.getItem('theme');
+              var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+              if (stored === 'dark' || (!stored && prefersDark)) {
+                document.documentElement.classList.add('dark');
+              }
+            } catch(e) {}
+          })();
+        `}</Script>
+      </head>
+      <body>
+        {children}
+      </body>
+    </html>
+  );
+}
+```
+
+**주의사항**:
+- `suppressHydrationWarning`은 `<html>` 요소에만 추가한다. 서버/클라이언트 간 `class` 속성값이 다를 수 있으므로 React hydration 경고를 억제하기 위함이다.
+- 기존 `ThemeToggle.tsx`의 `applyTheme()` 로직과 localStorage 키명("theme")은 변경하지 않는다.
+- `Geist` 폰트 변수 등 기존 className은 유지한다.
+
+**새로 추가되는 import**: `import Script from "next/script"` — Next.js 내장 패키지이므로 별도 설치 불필요.
+
+---
+
+### [S-02] PC 2패널 레이아웃 — 데스크톱 아코디언 2컬럼 구조
+
+**변경 대상 파일**: `app/page.tsx`
+
+**변경 내용 1 — `<main>` 컨테이너 너비 확장**:
+
+Step 3(결과 화면) 렌더 시 `<main>` 요소의 최대 너비를 데스크톱에서 확장한다.
+
+```typescript
+// 변경 전
+<main className="mx-auto w-full max-w-lg flex-1 px-4 pb-28 pt-6">
+
+// 변경 후
+<main className="mx-auto w-full max-w-lg lg:max-w-5xl flex-1 px-4 pb-28 pt-6">
+```
+
+단, `max-w-lg`는 Step 1~2(재료 선택, 카테고리 선택)에서는 유지하고, Step 3(결과 목록)에서만 `lg:max-w-5xl`로 확장하는 것을 권장한다. step 상태에 따라 className을 조건부 적용한다.
+
+**변경 내용 2 — 아코디언 펼침 영역 2컬럼 그리드**:
+
+`RecipeAccordionItem`의 펼쳐진 컨텐츠 div에 `lg:grid lg:grid-cols-2` 레이아웃을 적용한다.
+
+```typescript
+// 변경 전
+<div className="space-y-4">
+  <YouTubeEmbed url={recipe.youtubeUrl} title={recipe.youtubeTitle} />
+  <RecipeSummary steps={recipe.steps} summary={recipe.summary} />
+</div>
+
+// 변경 후
+<div className="space-y-4 lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0">
+  {/* 데스크톱: 우측, 모바일: 위 */}
+  <div className="lg:order-2">
+    <YouTubeEmbed url={recipe.youtubeUrl} title={recipe.youtubeTitle} />
+  </div>
+  {/* 데스크톱: 좌측, 모바일: 아래 */}
+  <div className="lg:order-1">
+    <RecipeSummary steps={recipe.steps} summary={recipe.summary} />
+  </div>
+</div>
+```
+
+**브레이크포인트 기준**:
+
+| 구간 | 너비 | 레이아웃 |
+|------|------|----------|
+| 모바일 | < 1024px | 세로 스택 (YouTube 위, 조리 요약 아래) |
+| 데스크톱 | >= 1024px | 2컬럼 그리드 (좌: 조리 요약, 우: YouTube) |
+
+**새로 추가되는 타입/인터페이스**: 없음.
+
+---
+
+### [S-03] 재료 선택 화면 안내 문구 추가
+
+**변경 대상 파일**: `app/page.tsx`
+
+**변경 내용**:
+
+Step 1(재료 선택) 화면에 INGREDIENT_CATEGORIES 버튼 그룹 렌더 직전에 안내 문구 div를 추가한다.
+
+```typescript
+// 추가할 JSX (카테고리 버튼 그룹 바로 위에 삽입)
+<div className="mb-3 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
+  아래 버튼은 레시피에 자주 쓰이는 재료예요. 목록에 없는 재료는 아래에서 직접 입력할 수 있어요.
+</div>
+```
+
+**카테고리 헤더 스타일 개선**:
+
+```typescript
+// 변경 전 (추정)
+<h2 className="... uppercase tracking-widest text-xs ...">육류</h2>
+
+// 변경 후
+<h2 className="mb-2.5 text-sm font-bold text-gray-600 dark:text-gray-400">
+  육류
+</h2>
+```
+
+**새로 추가되는 타입/인터페이스**: 없음.
+
+---
+
+### [C-01] 조리 단계 시간 정보 추가 (데이터 작업)
+
+**변경 대상 파일**: `data/recipes.json`
+
+**변경 방식**: 방법 A (스키마 변경 없음) — 기존 `steps: string[]` 구조를 유지하고 텍스트 내에 시간 표현을 추가한다.
+
+**수정 기준**: 아래 동사가 포함된 단계에만 시간 표현을 추가한다.
+
+| 동사 | 시간 표현 예시 |
+|------|---------------|
+| 볶는다 | "중불에서 5~7분 볶는다" |
+| 끓인다 | "10분간 끓인다" |
+| 굽는다 | "앞뒤로 각 3~4분 굽는다" |
+| 재운다 | "20~30분 재운다" |
+| 삶는다 | "8~10분 삶는다" |
+
+**타입 변경**: 없음. 기존 `steps: string[]` 유지.
+
+**컴포넌트 변경**: 없음. `RecipeSummary.tsx`는 string 배열을 그대로 렌더하므로 자동 반영된다.
+
+**작업 범위**: `data/recipes.json` 내 65개 레시피의 가열/처리 단계. 전체 steps를 수정하는 것이 아니라 시간 판단이 필요한 단계만 대상으로 한다.
+
+---
+
+### 신규 추가되는 타입/인터페이스 요약
+
+v1.1 변경사항에서 새로 추가되는 TypeScript 타입/인터페이스는 없다. 기존 타입을 그대로 사용하며 데이터와 로직 레이어만 수정한다.
+
+| 항목 | 기존 타입 | v1.1 변경 |
+|------|-----------|-----------|
+| `Recipe.steps` | `string[]` | 변경 없음 (방법 A 적용) |
+| `YouTubeEmbedProps` | `{ url: string; title?: string }` | 변경 없음 |
+| `ScoredRecipe.matchRatio` | `number` | 변경 없음 (필터 조건에만 활용) |
+
+---
+
+### 데이터 스키마 변경 요약
+
+| 파일 | 변경 내용 | 영향 범위 |
+|------|-----------|-----------|
+| `data/ingredients.json` | 달걀/계란 항목 통합 (계란 alias 추가, 중복 항목 제거) | `lib/ingredients/synonyms.ts`의 `buildSynonymMap()` 자동 반영 |
+| `data/recipes.json` | steps 배열 내 가열 단계 문자열에 시간 표현 추가 | `RecipeSummary.tsx` 렌더 자동 반영 (타입 변경 없음) |
+
+Supabase `user_recipes` 테이블 스키마 변경: 없음.
+
+---
+
+### v1.1 구현 순서 (권장)
+
+아래 순서는 의존성과 공수를 고려한 권장 작업 순서다.
+
+**1차 스프린트 (총 약 5시간)**:
+
+1. `[M-01]` `lib/recipes/search.ts` — matchRatio 필터 추가 (30분)
+2. `[M-03]` `data/ingredients.json` — 달걀/계란 동의어 통합 (1시간)
+3. `[M-02]` `app/_components/YouTubeEmbed.tsx` — referrerpolicy + 썸네일 fallback (2시간)
+4. `[S-03]` `app/page.tsx` — 재료 선택 안내 문구 추가 (30분)
+5. `[S-01]` `app/layout.tsx` — FOUC 해결 스크립트 삽입 (1시간)
+
+**2차 스프린트 (총 약 9시간)**:
+
+6. `[S-02]` `app/page.tsx` — PC 2패널 레이아웃 (3시간)
+7. `[C-01]` `data/recipes.json` — 조리 단계 시간 정보 추가 (4시간, 데이터 작업)
+8. `[C-02]` `lib/ingredients/popularity.ts` (신규) + `app/page.tsx` — 재료 인기순 정렬 (2시간)
