@@ -436,7 +436,7 @@ function HomePageInner() {
       </header>
 
       {/* 콘텐츠 */}
-      <main className={`mx-auto w-full flex-1 px-4 pb-28 pt-6 ${step === 3 ? "max-w-lg lg:max-w-5xl" : "max-w-lg"}`}>
+      <main className={`mx-auto w-full flex-1 px-4 pb-28 pt-6 max-w-lg ${step === 3 ? "lg:max-w-5xl" : ""}`}>
         {/* ── Step 1: 재료 선택 ── */}
         {step === 1 && (
           <div className="space-y-6">
