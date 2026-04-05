@@ -252,6 +252,64 @@
 
 ---
 
+---
+
+## v1.2 DB 아키텍처 변경 — PostgreSQL Docker 통합
+
+### DB Phase 1: 인프라 준비
+
+| # | 태스크 | 담당 | 상태 | 비고 |
+|---|--------|------|------|------|
+| 95 | `docker-compose.yml` 작성 | fullstack | TODO | postgres:15-alpine |
+| 96 | `supabase/schema.sql` 확장 (recipes, ingredients 테이블) | fullstack | TODO | |
+| 97 | `scripts/seed.ts` 작성 (JSON → DB) | fullstack | TODO | ON CONFLICT DO NOTHING |
+| 98 | `.env.local` + `.env.local.example` 업데이트 | fullstack | TODO | DATABASE_URL |
+| 99 | 컨테이너 기동 + seed 검증 | fullstack | TODO | docker compose up -d + db:seed |
+
+### DB Phase 2: DB 연결 레이어
+
+| # | 태스크 | 담당 | 상태 | 비고 |
+|---|--------|------|------|------|
+| 100 | `npm install pg @types/pg` | fullstack | TODO | |
+| 101 | `lib/db/client.ts` — pg Pool 클라이언트 | fullstack | TODO | |
+| 102 | `lib/db/transform.ts` — toCamelCase 헬퍼 | fullstack | TODO | |
+
+### DB Phase 3: 검색 로직 교체
+
+| # | 태스크 | 담당 | 상태 | 비고 |
+|---|--------|------|------|------|
+| 103 | `lib/recipes/search.ts` — DB 쿼리로 교체 | fullstack | TODO | |
+| 104 | `lib/ingredients/dictionary.ts` — 재료 사전 DB 조회 | fullstack | TODO | |
+| 105 | `lib/ingredients/synonyms.ts` — DB 기반 동의어 | fullstack | TODO | |
+| 106 | `IngredientInput.tsx` — Server Action으로 전환 | fullstack | TODO | |
+| 107 | `HomeClient.tsx` — 검색 Server Action 전환 | fullstack | TODO | |
+| 108 | `recipe/[id]/page.tsx` — DB 쿼리로 교체 | fullstack | TODO | |
+
+### DB Phase 4: 사용자 레시피 CRUD 교체
+
+| # | 태스크 | 담당 | 상태 | 비고 |
+|---|--------|------|------|------|
+| 109 | `recipe/new/actions.ts` — pg 쿼리로 교체 | fullstack | TODO | |
+| 110 | `recipe/[id]/edit/actions.ts` — pg 쿼리로 교체 | fullstack | TODO | |
+| 111 | `recipe/[id]/actions.ts` — pg 쿼리로 교체 | fullstack | TODO | |
+
+### DB Phase 5: 정리
+
+| # | 태스크 | 담당 | 상태 | 비고 |
+|---|--------|------|------|------|
+| 112 | `lib/supabase.ts` 삭제 | fullstack | TODO | |
+| 113 | `npm uninstall @supabase/supabase-js` | fullstack | TODO | |
+| 114 | `data/*.json` import 구문 제거 | fullstack | TODO | 파일은 seed 소스로 보관 |
+| 115 | `npx tsc --noEmit` + `npm run build` 검증 | fullstack | TODO | |
+
+### DB 코드 리뷰
+
+| # | 태스크 | 담당 | 상태 | 비고 |
+|---|--------|------|------|------|
+| 116 | v1.2 DB 변경 코드 리뷰 | reviewer | TODO | |
+
+---
+
 ## 요약
 
 | Phase | 태스크 수 | 상태 |
@@ -259,6 +317,7 @@
 | Phase 1: 기반 + 데이터 | 23개 | DONE |
 | Phase 2: 공통 컴포넌트 | 16개 | DONE |
 | Phase 3: 프로토타입 | 20개 | DONE |
-| Phase 4: Supabase CRUD | 15개 | BLOCKED (피드백 대기) |
-| Phase 5: 폴리싱 + 배포 | 20개 | IN_PROGRESS (일부 DONE) |
-| **총합** | **94개** | |
+| Phase 4: Supabase CRUD | 15개 | DONE |
+| Phase 5: 폴리싱 + 배포 | 20개 | DONE (배포 잔여) |
+| v1.2 DB 아키텍처 변경 | 22개 | TODO |
+| **총합** | **116개** | |

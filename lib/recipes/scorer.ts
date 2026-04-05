@@ -4,6 +4,8 @@
  * 사용자가 보유한 재료를 기준으로 레시피의 누락 재료 수를 계산합니다.
  * seasonings(기본 양념)은 점수 계산에서 완전 제외하고,
  * ingredients(필수 재료)만 대상으로 매칭합니다.
+ *
+ * ingredientMatches가 async이므로 scoreRecipe도 async입니다.
  */
 
 import { normalizeIngredient } from "@/lib/ingredients/normalize";
@@ -13,7 +15,7 @@ import type { Recipe, ScoredRecipe } from "@/lib/recipes/types";
 /**
  * 재료 문자열에서 수량/단위를 제거하고 재료명만 추출합니다.
  *
- * recipes.json의 ingredients 필드는 "삼겹살 300g", "달걀 4개" 형식이므로
+ * recipes의 ingredients 필드는 "삼겹살 300g", "달걀 4개" 형식이므로
  * 매칭 시 수량 표기를 걷어내야 합니다.
  *
  * @example
@@ -54,10 +56,10 @@ export function extractIngredientName(raw: string): string {
  * @param recipe - 점수를 계산할 레시피
  * @param userIngredients - 사용자가 보유한 재료 목록 (정규화 전 원본)
  */
-export function scoreRecipe(
+export async function scoreRecipe(
   recipe: Recipe,
   userIngredients: string[],
-): ScoredRecipe {
+): Promise<ScoredRecipe> {
   // 1. 사용자 재료 정규화 (매칭 성능을 위해 미리 처리)
   const normalizedUserIngredients = userIngredients.map((i) =>
     extractIngredientName(i),
@@ -75,9 +77,13 @@ export function scoreRecipe(
     const recipeIngredientName = extractIngredientName(recipeIngredient);
 
     // 사용자 재료 중 일치하는 것이 있는지 확인 (동의어 포함)
-    const isMatched = normalizedUserIngredients.some((userIngredient) =>
-      ingredientMatches(recipeIngredientName, userIngredient),
+    // ingredientMatches가 async이므로 Promise.all로 병렬 처리
+    const matchResults = await Promise.all(
+      normalizedUserIngredients.map((userIngredient) =>
+        ingredientMatches(recipeIngredientName, userIngredient),
+      ),
     );
+    const isMatched = matchResults.some(Boolean);
 
     if (isMatched) {
       matchedIngredients.push(recipeIngredient);

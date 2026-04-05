@@ -28,7 +28,7 @@ export interface SearchResult {
 export async function searchRecipesAction(
   params: SearchParams,
 ): Promise<ScoredRecipe[]> {
-  return filterStaticRecipes(params.ingredients, params.cuisines);
+  return await filterStaticRecipes(params.ingredients, params.cuisines);
 }
 
 /**
@@ -37,5 +37,5 @@ export async function searchRecipesAction(
 export async function getCuisineCountsAction(
   ingredients: string[],
 ): Promise<Record<CuisineType, number>> {
-  return getCuisineCounts(ingredients);
+  return await getCuisineCounts(ingredients);
 }

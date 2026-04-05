@@ -835,3 +835,497 @@ Supabase `user_recipes` 테이블 스키마 변경: 없음.
 6. `[S-02]` `app/page.tsx` — PC 2패널 레이아웃 (3시간)
 7. `[C-01]` `data/recipes.json` — 조리 단계 시간 정보 추가 (4시간, 데이터 작업)
 8. `[C-02]` `lib/ingredients/popularity.ts` (신규) + `app/page.tsx` — 재료 인기순 정렬 (2시간)
+
+---
+
+## v1.2 데이터베이스 아키텍처 변경 (PostgreSQL Docker)
+
+> 기준일: 2026-04-05
+> 변경 배경: 기존 정적 JSON + Supabase 이중 구조를 로컬 PostgreSQL Docker 컨테이너 단일 구조로 통합. Supabase는 코드만 준비된 상태로 실제 연결 이력 없음. JSON 파일의 클라이언트 번들 포함 방식은 레시피 데이터가 60~80개 수준을 넘어설 경우 번들 사이즈 비효율을 초래.
+
+---
+
+### 1. 변경 결정 근거
+
+| 구분 | 기존 구조 | 변경 후 구조 |
+|------|-----------|-------------|
+| 큐레이션 레시피 | `data/recipes.json` (클라이언트 번들) | PostgreSQL `recipes` 테이블 (서버 쿼리) |
+| 재료 사전 | `data/ingredients.json` (클라이언트 번들) | PostgreSQL `ingredients` 테이블 (서버 쿼리) |
+| 사용자 레시피 | Supabase PostgreSQL | PostgreSQL `user_recipes` 테이블 (동일 DB) |
+| 접속 방법 | Supabase SDK + JSON import | pg 또는 Prisma/Drizzle ORM |
+| 환경변수 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `DATABASE_URL` (단일) |
+
+---
+
+### 2. docker-compose.yml 구성
+
+```yaml
+# docker-compose.yml (프로젝트 루트)
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: simple_recipe_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: simple_recipe
+      POSTGRES_USER: recipe_user
+      POSTGRES_PASSWORD: recipe_pass   # 로컬 개발 전용, 프로덕션은 환경변수로 교체
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data   # 데이터 영속성 보장
+      - ./supabase/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql  # 초기 스키마 자동 실행
+      - ./scripts/seed.sql:/docker-entrypoint-initdb.d/02_seed.sql       # 초기 시드 데이터 자동 실행
+
+volumes:
+  postgres_data:
+```
+
+**컨테이너 시작/종료**:
+```bash
+# 시작 (백그라운드)
+docker compose up -d
+
+# 종료 (데이터 보존)
+docker compose stop
+
+# 완전 초기화 (데이터 삭제)
+docker compose down -v
+```
+
+---
+
+### 3. 데이터베이스 스키마
+
+**파일**: `supabase/schema.sql` (기존 파일 확장)
+
+#### 3-1. recipes 테이블 (큐레이션 레시피)
+
+```sql
+CREATE TABLE recipes (
+  id            VARCHAR(50)  PRIMARY KEY,                        -- "korean-001" 형태 유지
+  name          VARCHAR(100) NOT NULL,
+  cuisine       VARCHAR(20)  NOT NULL CHECK (cuisine IN ('korean','chinese','japanese','western')),
+  difficulty    VARCHAR(10)  NOT NULL CHECK (difficulty IN ('easy','medium','hard')),
+  cook_time     VARCHAR(20),
+  servings      INTEGER      DEFAULT 2,
+  ingredients   TEXT[]       NOT NULL,                           -- 필수 재료 배열
+  seasonings    TEXT[]       DEFAULT '{}',                       -- 기본 양념 배열
+  steps         TEXT[]       NOT NULL,                           -- 조리 순서 배열
+  youtube_url   VARCHAR(500),
+  youtube_title VARCHAR(200),
+  channel_name  VARCHAR(200),
+  thumbnail_url VARCHAR(500),
+  summary       TEXT,
+  source        VARCHAR(10)  NOT NULL DEFAULT 'curated'
+                CHECK (source = 'curated'),
+  created_at    TIMESTAMPTZ  DEFAULT NOW()
+);
+
+-- 카테고리 필터링 인덱스
+CREATE INDEX idx_recipes_cuisine     ON recipes(cuisine);
+-- 재료 배열 전문 검색 GIN 인덱스
+CREATE INDEX idx_recipes_ingredients ON recipes USING GIN(ingredients);
+```
+
+#### 3-2. ingredients 테이블 (재료 사전)
+
+```sql
+CREATE TABLE ingredients (
+  id       SERIAL       PRIMARY KEY,
+  name     VARCHAR(100) NOT NULL UNIQUE,                         -- 정규화된 대표 이름 (예: "달걀")
+  aliases  TEXT[]       DEFAULT '{}',                            -- 동의어 배열 (예: ["계란", "에그"])
+  category VARCHAR(20)  NOT NULL
+           CHECK (category IN ('meat','seafood','vegetable','dairy','grain','seasoning','pantry'))
+);
+
+-- 동의어 포함 전문 검색을 위한 GIN 인덱스
+CREATE INDEX idx_ingredients_aliases ON ingredients USING GIN(aliases);
+```
+
+#### 3-3. user_recipes 테이블 (사용자 등록 레시피)
+
+기존 Supabase 스키마 (`supabase/schema.sql`) 그대로 유지. 변경 없음.
+
+```sql
+-- 기존 스키마 참조 (supabase/schema.sql)
+-- updated_at 자동 갱신 트리거 포함
+CREATE TABLE user_recipes (
+  id            UUID         DEFAULT gen_random_uuid() PRIMARY KEY,
+  author_name   VARCHAR(50)  NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  name          VARCHAR(100) NOT NULL,
+  cuisine       VARCHAR(20)  NOT NULL CHECK (cuisine IN ('korean','chinese','japanese','western')),
+  difficulty    VARCHAR(10)  NOT NULL CHECK (difficulty IN ('easy','medium','hard')),
+  cook_time     VARCHAR(20),
+  servings      INTEGER      DEFAULT 2,
+  ingredients   TEXT[]       NOT NULL,
+  seasonings    TEXT[]       DEFAULT '{}',
+  steps         TEXT[]       NOT NULL,
+  youtube_url   VARCHAR(500),
+  youtube_title VARCHAR(200),
+  channel_name  VARCHAR(200),
+  thumbnail_url VARCHAR(500),
+  summary       TEXT,
+  created_at    TIMESTAMPTZ  DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ  DEFAULT NOW()
+);
+
+CREATE INDEX idx_user_recipes_cuisine      ON user_recipes(cuisine);
+CREATE INDEX idx_user_recipes_ingredients  ON user_recipes USING GIN(ingredients);
+
+-- updated_at 자동 갱신 트리거 (기존 유지)
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER set_updated_at
+  BEFORE UPDATE ON user_recipes
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+```
+
+---
+
+### 4. seed 스크립트 구조 (JSON → DB)
+
+JSON 데이터를 PostgreSQL로 마이그레이션하는 스크립트를 두 가지 방식으로 제공한다.
+
+#### 방법 A — SQL seed 파일 (docker-compose 자동 실행)
+
+`scripts/seed.sql`: `data/recipes.json`과 `data/ingredients.json`의 내용을 SQL `INSERT` 문으로 변환하여 작성. docker-compose 초기화 시 `02_seed.sql`로 자동 실행.
+
+```sql
+-- scripts/seed.sql (발췌 예시)
+INSERT INTO recipes (id, name, cuisine, difficulty, cook_time, servings, ingredients, seasonings, steps, youtube_url, youtube_title, channel_name, thumbnail_url, summary, source)
+VALUES
+  ('korean-001', '제육볶음', 'korean', 'easy', '20분', 2,
+   ARRAY['돼지고기 앞다리살', '양파', '대파', '청양고추'],
+   ARRAY['간장', '고추장', '참기름', '다진마늘', '설탕'],
+   ARRAY['돼지고기를 먹기 좋은 크기로 썬다', '양념 재료를 모두 섞는다', '고기에 양념을 넣고 20분 재운다', '팬에 기름을 두르고 중불에서 7~8분 볶는다'],
+   'https://youtu.be/xxxxx', '제육볶음 황금레시피', '백종원의 요리비책',
+   'https://img.youtube.com/vi/xxxxx/hqdefault.jpg',
+   '간단하고 맛있는 제육볶음 레시피입니다.', 'curated'),
+  -- ... 나머지 레시피
+;
+
+INSERT INTO ingredients (name, aliases, category)
+VALUES
+  ('달걀', ARRAY['계란', '에그', '달걀(계란)'], 'pantry'),
+  ('돼지고기', ARRAY['돼지', '삼겹살', '목살', '앞다리살'], 'meat'),
+  -- ... 나머지 재료
+;
+```
+
+#### 방법 B — TypeScript seed 스크립트 (수동 실행)
+
+```typescript
+// scripts/seed.ts
+import { readFileSync } from "fs";
+import { Pool } from "pg";
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+async function seed() {
+  const recipes = JSON.parse(readFileSync("data/recipes.json", "utf-8"));
+  const { ingredients } = JSON.parse(readFileSync("data/ingredients.json", "utf-8"));
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    for (const recipe of recipes) {
+      await client.query(
+        `INSERT INTO recipes
+           (id, name, cuisine, difficulty, cook_time, servings,
+            ingredients, seasonings, steps,
+            youtube_url, youtube_title, channel_name, thumbnail_url, summary, source)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          recipe.id, recipe.name, recipe.cuisine, recipe.difficulty,
+          recipe.cookTime, recipe.servings,
+          recipe.ingredients, recipe.seasonings, recipe.steps,
+          recipe.youtubeUrl, recipe.youtubeTitle, recipe.channelName,
+          recipe.thumbnailUrl, recipe.summary, "curated",
+        ]
+      );
+    }
+
+    for (const ing of ingredients) {
+      await client.query(
+        `INSERT INTO ingredients (name, aliases, category)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (name) DO NOTHING`,
+        [ing.name, ing.aliases, ing.category]
+      );
+    }
+
+    await client.query("COMMIT");
+    console.log("Seed complete.");
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+    await pool.end();
+  }
+}
+
+seed();
+```
+
+**실행 방법**:
+```bash
+# package.json scripts에 추가
+"db:seed": "npx tsx scripts/seed.ts"
+
+# 실행
+npm run db:seed
+```
+
+---
+
+### 5. 환경변수 변경
+
+#### 변경 전 (`.env.local`)
+```
+NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+```
+
+#### 변경 후 (`.env.local`)
+```
+# 로컬 개발 (Docker)
+DATABASE_URL=postgresql://recipe_user:recipe_pass@localhost:5432/simple_recipe
+
+# 프로덕션 (Railway / Neon 등 — 섹션 7 참조)
+# DATABASE_URL=postgresql://user:pass@host:5432/dbname?sslmode=require
+```
+
+**주의**: `DATABASE_URL`은 서버 사이드 전용이므로 `NEXT_PUBLIC_` 접두사를 붙이지 않는다. 클라이언트 번들에 DB 접속 정보가 노출되면 보안 취약점이 발생한다.
+
+---
+
+### 6. 제거 대상 파일 및 패키지
+
+#### 제거 파일
+| 파일/폴더 | 제거 이유 |
+|-----------|-----------|
+| `lib/supabase.ts` | Supabase 클라이언트 초기화 — 더 이상 불필요 |
+| `data/recipes.json` | DB seed 완료 후 참조 제거 (seed 소스로만 일시 보관 가능) |
+| `data/ingredients.json` | DB seed 완료 후 참조 제거 (동일) |
+
+> `data/*.json` 파일은 seed 작업 완료 확인 후 제거한다. seed 스크립트의 소스 파일로 일시 보관해도 무방하나, 클라이언트 코드에서 `import`하는 구문은 즉시 제거해야 한다.
+
+#### 제거 패키지
+```bash
+npm uninstall @supabase/supabase-js
+```
+
+---
+
+### 7. 검색 로직 변경
+
+#### ORM 선택 — Prisma vs Drizzle
+
+| 기준 | Prisma | Drizzle |
+|------|--------|---------|
+| 타입 안전성 | 자동 생성 타입 (스키마 기반) | SQL과 1:1 대응, 완전한 타입 추론 |
+| 학습 곡선 | 중간 (Prisma 고유 문법) | 낮음 (SQL을 알면 바로 사용 가능) |
+| 번들 사이즈 | 큼 (Prisma Client 엔진) | 작음 (경량 라이브러리) |
+| 서버리스 호환 | Prisma Accelerate 별도 필요 | 네이티브 지원 (`pg` 드라이버 직접 사용) |
+| Edge Runtime 지원 | 제한적 | 완전 지원 |
+
+> **권장안**: Drizzle ORM + `pg` 드라이버. 서버리스/엣지 환경 호환성이 높고, 기존 SQL 스키마를 그대로 타입으로 변환할 수 있어 이 프로젝트의 스키마 복잡도에 적합.
+
+#### 변경 전 (JSON import 방식)
+```typescript
+// lib/recipes/search.ts
+import recipesData from "@/data/recipes.json";   // 번들 포함
+
+function filterStaticRecipes(ingredients: string[], cuisines: CuisineType[]) {
+  return recipesData.filter(recipe => /* ... */);
+}
+```
+
+#### 변경 후 (DB 쿼리 방식 — pg 직접 사용 예시)
+```typescript
+// lib/recipes/search.ts
+"use server";
+
+import { Pool } from "pg";
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+export async function searchCuratedRecipes(
+  ingredients: string[],
+  cuisines: CuisineType[]
+): Promise<Recipe[]> {
+  const cuisineFilter = cuisines.length > 0
+    ? `AND cuisine = ANY($2::text[])`
+    : "";
+
+  const { rows } = await pool.query(
+    `SELECT id, name, cuisine, difficulty, cook_time, servings,
+            ingredients, seasonings, steps,
+            youtube_url, youtube_title, channel_name, thumbnail_url, summary,
+            'curated' AS source
+     FROM recipes
+     WHERE ingredients && $1::text[]  -- 입력 재료와 교집합이 있는 레시피만
+     ${cuisineFilter}`,
+    cuisines.length > 0 ? [ingredients, cuisines] : [ingredients]
+  );
+
+  return rows.map(toCamelCase);  // snake_case → camelCase 변환 헬퍼 필요
+}
+```
+
+**`toCamelCase` 헬퍼 위치**: `lib/db/transform.ts` (신규 파일)
+
+```typescript
+// lib/db/transform.ts
+export function toCamelCase(row: Record<string, unknown>): Recipe {
+  return {
+    id:           row.id as string,
+    name:         row.name as string,
+    cuisine:      row.cuisine as CuisineType,
+    difficulty:   row.difficulty as DifficultyType,
+    cookTime:     row.cook_time as string,
+    servings:     row.servings as number,
+    ingredients:  row.ingredients as string[],
+    seasonings:   row.seasonings as string[],
+    steps:        row.steps as string[],
+    youtubeUrl:   row.youtube_url as string,
+    youtubeTitle: row.youtube_title as string,
+    channelName:  row.channel_name as string,
+    thumbnailUrl: row.thumbnail_url as string,
+    summary:      row.summary as string,
+    source:       row.source as "curated" | "user",
+  };
+}
+```
+
+#### 재료 사전 조회
+
+```typescript
+// lib/ingredients/dictionary.ts
+"use server";
+
+import { Pool } from "pg";
+import type { Ingredient } from "@/lib/recipes/types";
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+export async function getAllIngredients(): Promise<Ingredient[]> {
+  const { rows } = await pool.query(
+    `SELECT name, aliases, category FROM ingredients ORDER BY name`
+  );
+  return rows as Ingredient[];
+}
+```
+
+**자동완성 연동**: `IngredientInput.tsx` 마운트 시 `getAllIngredients()`를 호출하여 자동완성 후보 목록을 구성한다. 기존 `data/ingredients.json` import 구문을 이 Server Action 호출로 교체한다.
+
+---
+
+### 8. 배포 시 고려사항
+
+#### 핵심 제약
+
+Vercel은 서버리스(Serverless) 환경이므로 **영속적인 TCP 연결을 유지할 수 없다**. 직접 `pg.Pool`을 사용하는 경우 콜드 스타트마다 커넥션을 재생성하며, 커넥션 풀이 누적될 수 있다. 이를 해결하기 위해 아래 두 가지 방안 중 하나를 선택한다.
+
+#### 방안 A — Neon (권장, 무료 플랜 있음)
+
+Neon은 서버리스 PostgreSQL 서비스로, HTTP 기반 쿼리와 커넥션 풀링을 기본 제공한다.
+
+```bash
+npm install @neondatabase/serverless
+```
+
+```typescript
+// lib/db/client.ts
+import { neon } from "@neondatabase/serverless";
+
+export const sql = neon(process.env.DATABASE_URL!);
+```
+
+| 항목 | 무료 플랜 한도 |
+|------|--------------|
+| 스토리지 | 512MB |
+| 컴퓨팅 시간 | 191.9시간 / 월 |
+| 프로젝트 수 | 1개 |
+| 비용 | **$0** |
+
+> Neon 무료 플랜은 Supabase 무료 플랜과 동등한 수준. 로컬 개발은 Docker, 프로덕션은 Neon으로 동일한 PostgreSQL 환경을 유지할 수 있다.
+
+#### 방안 B — Railway
+
+Railway는 컨테이너 기반 PostgreSQL을 제공하며, 영속적 TCP 연결을 지원한다. 무료 크레딧($5/월)이 소진되면 과금이 발생하므로 트래픽이 적은 초기 단계에서는 Neon이 더 적합하다.
+
+#### 환경별 DATABASE_URL 설정
+
+| 환경 | DATABASE_URL |
+|------|-------------|
+| 로컬 개발 | `postgresql://recipe_user:recipe_pass@localhost:5432/simple_recipe` |
+| Vercel 프리뷰 | Neon 개발 브랜치 URL (Neon의 브랜치 기능 활용 가능) |
+| Vercel 프로덕션 | Neon 프로덕션 URL (`?sslmode=require` 필수) |
+
+**Vercel 환경변수 등록**:
+```
+# Vercel 대시보드 → Settings → Environment Variables
+DATABASE_URL=postgresql://user:pass@ep-xxx.ap-southeast-1.aws.neon.tech/simple_recipe?sslmode=require
+```
+
+#### 마이그레이션 관리
+
+프로덕션 DB 스키마 변경 시 `supabase/schema.sql`을 직접 수정하는 대신, 버전 번호가 붙은 마이그레이션 파일을 운용한다.
+
+```
+supabase/
+├── migrations/
+│   ├── 001_initial_schema.sql    # recipes, ingredients, user_recipes 테이블
+│   └── 002_add_indexes.sql       # 추가 인덱스
+└── schema.sql                    # 최신 전체 스키마 (참조용)
+```
+
+Drizzle ORM을 선택한 경우 `drizzle-kit generate` 명령으로 마이그레이션 파일을 자동 생성할 수 있다.
+
+---
+
+### 9. 변경 구현 순서 (권장)
+
+아래 순서는 의존성을 고려한 권장 작업 순서다. 각 단계는 독립적으로 검증 가능하다.
+
+**Phase 1 — 인프라 준비 (약 1시간)**:
+1. `docker-compose.yml` 작성 및 컨테이너 기동 확인
+2. `supabase/schema.sql` 확장 (`recipes`, `ingredients` 테이블 추가)
+3. `scripts/seed.ts` 작성 및 `npm run db:seed` 실행 검증
+
+**Phase 2 — DB 연결 레이어 (약 2시간)**:
+4. `lib/db/client.ts` 작성 (pg Pool 또는 Neon 클라이언트)
+5. `lib/db/transform.ts` 작성 (snake_case → camelCase 변환)
+6. `.env.local` 환경변수 교체
+
+**Phase 3 — 검색 로직 교체 (약 3시간)**:
+7. `lib/recipes/search.ts` — JSON import → DB 쿼리로 교체
+8. `lib/ingredients/dictionary.ts` 신규 작성
+9. `IngredientInput.tsx` — JSON import → Server Action 호출로 교체
+10. `app/recipe/[id]/page.tsx` — JSON lookup → DB 쿼리로 교체
+
+**Phase 4 — 사용자 레시피 CRUD 교체 (약 2시간)**:
+11. `app/recipe/new/actions.ts` — Supabase SDK → pg 쿼리로 교체
+12. `app/recipe/[id]/edit/actions.ts` — 동일
+13. `app/recipe/[id]/actions.ts` — 동일
+
+**Phase 5 — 정리 (약 1시간)**:
+14. `lib/supabase.ts` 삭제
+15. `npm uninstall @supabase/supabase-js`
+16. `data/recipes.json`, `data/ingredients.json` import 구문 제거 (파일 자체는 seed 소스로 보관 가능)
+17. `npx tsc --noEmit` 및 `npx eslint . --quiet` 통과 확인
