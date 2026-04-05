@@ -1,16 +1,72 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import Link from "next/link";
 import recipesData from "@/data/recipes.json";
 import type { Recipe } from "@/lib/recipes/types";
+import { supabase } from "@/lib/supabase";
 import YouTubeEmbed from "@/app/_components/YouTubeEmbed";
 import RecipeSummary from "@/app/_components/RecipeSummary";
+import RecipeActions from "./RecipeActions";
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-function findRecipe(id: string): Recipe | undefined {
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * 큐레이션 정적 JSON에서 레시피를 찾습니다.
+ */
+function findCuratedRecipe(id: string): Recipe | undefined {
   return (recipesData as Recipe[]).find((r) => r.id === id);
+}
+
+/**
+ * Supabase user_recipes 행을 도메인 Recipe 타입으로 변환합니다.
+ */
+function rowToRecipe(row: Record<string, unknown>): Recipe {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    cuisine: row.cuisine as Recipe["cuisine"],
+    difficulty: row.difficulty as Recipe["difficulty"],
+    cookTime: (row.cook_time as string) ?? "",
+    servings: (row.servings as number) ?? 2,
+    ingredients: (row.ingredients as string[]) ?? [],
+    seasonings: (row.seasonings as string[]) ?? [],
+    steps: (row.steps as string[]) ?? [],
+    youtubeUrl: (row.youtube_url as string) ?? "",
+    youtubeTitle: (row.youtube_title as string) ?? "",
+    channelName: (row.channel_name as string) ?? "",
+    thumbnailUrl: (row.thumbnail_url as string) ?? "",
+    summary: (row.summary as string) ?? "",
+    source: "user",
+  };
+}
+
+/**
+ * id 형식에 따라 레시피를 조회합니다.
+ * - UUID 형식 → Supabase user_recipes 조회
+ * - 그 외 → 정적 JSON 조회
+ */
+async function findRecipe(id: string): Promise<Recipe | undefined> {
+  if (UUID_REGEX.test(id)) {
+    // 사용자 레시피 조회
+    if (!supabase) return undefined;
+    const { data, error } = await supabase
+      .from("user_recipes")
+      .select(
+        "id, author_name, name, cuisine, difficulty, cook_time, servings, ingredients, seasonings, steps, youtube_url, youtube_title, channel_name, thumbnail_url, summary",
+      )
+      .eq("id", id)
+      .single();
+    if (error || !data) return undefined;
+    return rowToRecipe(data as Record<string, unknown>);
+  }
+
+  // 큐레이션 레시피 조회
+  return findCuratedRecipe(id);
 }
 
 export async function generateStaticParams() {
@@ -19,7 +75,7 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
-  const recipe = findRecipe(id);
+  const recipe = await findRecipe(id);
   if (!recipe) return { title: "레시피를 찾을 수 없어요 | 레시피 보드" };
   return {
     title: `${recipe.name} | 레시피 보드`,
@@ -42,18 +98,20 @@ const DIFFICULTY_LABEL: Record<string, string> = {
 
 export default async function RecipeDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const recipe = findRecipe(id);
+  const recipe = await findRecipe(id);
 
   if (!recipe) {
     notFound();
   }
+
+  const isUserRecipe = recipe.source === "user";
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50 dark:bg-gray-950">
       {/* 헤더 */}
       <header className="sticky top-0 z-10 border-b border-gray-200 bg-white/95 backdrop-blur dark:border-gray-800 dark:bg-gray-950/95">
         <div className="mx-auto max-w-lg px-4 py-3">
-          <a
+          <Link
             href="/"
             className="inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:underline"
           >
@@ -61,7 +119,7 @@ export default async function RecipeDetailPage({ params }: PageProps) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
             레시피 보드
-          </a>
+          </Link>
         </div>
       </header>
 
@@ -77,12 +135,19 @@ export default async function RecipeDetailPage({ params }: PageProps) {
               <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600 dark:bg-gray-800 dark:text-gray-300">
                 {DIFFICULTY_LABEL[recipe.difficulty] ?? recipe.difficulty}
               </span>
-              <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                {recipe.cookTime}
-              </span>
+              {recipe.cookTime && (
+                <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                  {recipe.cookTime}
+                </span>
+              )}
               <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600 dark:bg-gray-800 dark:text-gray-300">
                 {recipe.servings}인분
               </span>
+              {isUserRecipe && (
+                <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700 dark:bg-green-900/40 dark:text-green-400">
+                  사용자 등록
+                </span>
+              )}
             </div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-50">
               {recipe.name}
@@ -93,6 +158,9 @@ export default async function RecipeDetailPage({ params }: PageProps) {
               </p>
             )}
           </div>
+
+          {/* 사용자 레시피 수정/삭제 버튼 */}
+          {isUserRecipe && <RecipeActions recipeId={id} />}
 
           {/* 유튜브 임베드 */}
           <YouTubeEmbed url={recipe.youtubeUrl} title={recipe.youtubeTitle} />
