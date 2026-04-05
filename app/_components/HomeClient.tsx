@@ -429,7 +429,15 @@ export default function HomeClient({
                 BETA
               </span>
             </div>
-            <ThemeToggle />
+            <div className="flex items-center gap-2">
+              <a
+                href="/recipe/new"
+                className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-hover transition-colors"
+              >
+                레시피 등록
+              </a>
+              <ThemeToggle />
+            </div>
           </div>
           <ProgressIndicator currentStep={step} />
           <StepLabel currentStep={step} />
