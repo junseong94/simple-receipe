@@ -283,9 +283,13 @@ function RecipeAccordionItem({
       {/* 아코디언 컨텐츠 */}
       {open && (
         <div className="border-t border-gray-100 px-4 pb-4 pt-3 dark:border-gray-700/50">
-          <div className="space-y-4">
-            <YouTubeEmbed url={recipe.youtubeUrl} title={recipe.youtubeTitle} />
-            <RecipeSummary steps={recipe.steps} summary={recipe.summary} />
+          <div className="space-y-4 lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0">
+            <div className="lg:order-2">
+              <YouTubeEmbed url={recipe.youtubeUrl} title={recipe.youtubeTitle} />
+            </div>
+            <div className="lg:order-1">
+              <RecipeSummary steps={recipe.steps} summary={recipe.summary} />
+            </div>
           </div>
         </div>
       )}
@@ -432,7 +436,7 @@ function HomePageInner() {
       </header>
 
       {/* 콘텐츠 */}
-      <main className="mx-auto w-full max-w-lg flex-1 px-4 pb-28 pt-6">
+      <main className={`mx-auto w-full flex-1 px-4 pb-28 pt-6 max-w-lg ${step === 3 ? "lg:max-w-5xl" : ""}`}>
         {/* ── Step 1: 재료 선택 ── */}
         {step === 1 && (
           <div className="space-y-6">
