@@ -3,6 +3,19 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Prototype A — Orange */
+  --color-proto-a: #F97316;
+  --color-proto-a-hover: #EA6C0A;
+
+  /* Prototype B — Cream & Teal */
+  --color-proto-b-cream: #FFFBF0;
+  --color-proto-b-teal: #0D9488;
+  --color-proto-b-teal-hover: #0B7E74;
+
+  /* Prototype C — Blue */
+  --color-proto-c: #3B82F6;
+  --color-proto-c-hover: #2563EB;
 }
 
 @theme inline {
@@ -10,17 +23,39 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Prototype color tokens */
+  --color-orange-brand: var(--color-proto-a);
+  --color-orange-brand-hover: var(--color-proto-a-hover);
+  --color-cream: var(--color-proto-b-cream);
+  --color-teal-brand: var(--color-proto-b-teal);
+  --color-teal-brand-hover: var(--color-proto-b-teal-hover);
+  --color-blue-brand: var(--color-proto-c);
+  --color-blue-brand-hover: var(--color-proto-c-hover);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+
+    /* Prototype A — slightly brighter for dark bg */
+    --color-proto-a: #FB923C;
+    --color-proto-a-hover: #F97316;
+
+    /* Prototype B — teal stays, cream inverted */
+    --color-proto-b-cream: #1C1A14;
+    --color-proto-b-teal: #14B8A6;
+    --color-proto-b-teal-hover: #0D9488;
+
+    /* Prototype C — brighter blue */
+    --color-proto-c: #60A5FA;
+    --color-proto-c-hover: #3B82F6;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
