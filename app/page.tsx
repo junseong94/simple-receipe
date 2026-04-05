@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useTransition, Suspense } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import IngredientInput from "@/app/_components/IngredientInput";
 import YouTubeEmbed from "@/app/_components/YouTubeEmbed";
 import RecipeSummary from "@/app/_components/RecipeSummary";
@@ -99,7 +100,7 @@ const INGREDIENT_CATEGORIES = [
   },
   {
     label: "기타",
-    items: ["계란", "라면", "떡볶이떡", "슬라이스치즈", "우유", "밥(쌀)", "파스타면", "당면"],
+    items: ["달걀", "라면", "떡볶이떡", "슬라이스치즈", "우유", "밥(쌀)", "파스타면", "당면"],
   },
 ] as const;
 
@@ -418,12 +419,12 @@ function HomePageInner() {
                 BETA
               </span>
             </div>
-            <a
+            <Link
               href="/recipe/new"
               className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-hover transition-colors"
             >
               레시피 등록
-            </a>
+            </Link>
           </div>
           <ProgressIndicator currentStep={step} />
           <StepLabel currentStep={step} />
@@ -442,6 +443,11 @@ function HomePageInner() {
               <p className="mt-1 text-gray-500 dark:text-gray-400">
                 냉장고에 있는 재료를 선택해주세요
               </p>
+            </div>
+
+            {/* 재료 선택 안내 문구 */}
+            <div className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
+              아래 버튼은 레시피에 자주 쓰이는 재료예요. 목록에 없는 재료는 하단에서 직접 입력할 수 있어요.
             </div>
 
             {/* 카테고리별 재료 버튼 */}
