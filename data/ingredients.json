@@ -1348,11 +1348,12 @@
       "category": "pantry"
     },
     {
-      "name": "계란",
+      "name": "달걀",
       "aliases": [
-        "달걀",
+        "계란",
         "달걀(생)",
-        "생계란"
+        "생계란",
+        "에그"
       ],
       "category": "pantry"
     },
