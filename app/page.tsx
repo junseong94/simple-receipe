@@ -1,12 +1,41 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useCallback, useEffect, useTransition, Suspense } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import IngredientInput from "@/app/_components/IngredientInput";
 import YouTubeEmbed from "@/app/_components/YouTubeEmbed";
 import RecipeSummary from "@/app/_components/RecipeSummary";
 import MissingBadge from "@/app/_components/MissingBadge";
-import { filterStaticRecipes, getCuisineCounts } from "@/lib/recipes/search";
+import { searchRecipesAction, getCuisineCountsAction } from "@/app/actions";
 import type { CuisineType, ScoredRecipe } from "@/lib/recipes/types";
+
+// ─── URL searchParams 파싱 유틸 ────────────────────────────────────────────────
+
+const VALID_CUISINES: CuisineType[] = ["korean", "chinese", "japanese", "western"];
+const ALL_CUISINES: CuisineType[] = ["korean", "chinese", "japanese", "western"];
+
+function parseStepParam(raw: string | null): Step {
+  const n = Number(raw);
+  return n === 1 || n === 2 || n === 3 ? n : 1;
+}
+
+function parseIngredientsParam(raw: string | null): string[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 20);
+}
+
+function parseCuisinesParam(raw: string | null): CuisineType[] {
+  if (!raw) return ALL_CUISINES;
+  const parsed = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s): s is CuisineType => VALID_CUISINES.includes(s as CuisineType));
+  return parsed.length > 0 ? parsed : ALL_CUISINES;
+}
 
 // ─── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -265,27 +294,94 @@ function RecipeAccordionItem({
 
 // ─── 메인 페이지 ───────────────────────────────────────────────────────────────
 
-export default function HomePage() {
-  const [step, setStep] = useState<Step>(1);
-  const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]);
-  const [selectedCuisines, setSelectedCuisines] = useState<CuisineType[]>([
-    "korean",
-    "chinese",
-    "japanese",
-    "western",
-  ]);
+/** useSearchParams를 사용하는 실제 컴포넌트 — Suspense 내부에서만 렌더됨 */
+function HomePageInner() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [isPending, startTransition] = useTransition();
 
-  // 카테고리 카운트 (Step 2에서 미리보기용)
-  const cuisineCounts = useMemo(
-    () => getCuisineCounts(selectedIngredients),
-    [selectedIngredients],
+  // URL searchParams에서 초기값 파싱 — 뒤로가기 시 상태 복원의 핵심
+  const [step, setStepState] = useState<Step>(() =>
+    parseStepParam(searchParams.get("step")),
+  );
+  const [selectedIngredients, setSelectedIngredients] = useState<string[]>(() =>
+    parseIngredientsParam(searchParams.get("ingredients")),
+  );
+  const [selectedCuisines, setSelectedCuisines] = useState<CuisineType[]>(() =>
+    parseCuisinesParam(searchParams.get("cuisines")),
+  );
+  const [results, setResults] = useState<ScoredRecipe[]>([]);
+  const [cuisineCounts, setCuisineCounts] = useState<Record<CuisineType, number>>({
+    korean: 0,
+    chinese: 0,
+    japanese: 0,
+    western: 0,
+  });
+
+  // URL 동기화 헬퍼
+  const syncUrl = useCallback(
+    (nextStep: Step, ingredients: string[], cuisines: CuisineType[]) => {
+      const params = new URLSearchParams();
+      params.set("step", String(nextStep));
+      if (ingredients.length > 0) {
+        params.set("ingredients", ingredients.join(","));
+      }
+      params.set("cuisines", cuisines.join(","));
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [router, pathname],
   );
 
-  // 검색 결과 (Step 3)
-  const results = useMemo<ScoredRecipe[]>(() => {
-    if (step !== 3) return [];
-    return filterStaticRecipes(selectedIngredients, selectedCuisines);
-  }, [step, selectedIngredients, selectedCuisines]);
+  // Step 1 → 2: cuisine 카운트를 서버에서 조회 (recipes.json 서버 격리)
+  const goToStep2 = useCallback(() => {
+    startTransition(async () => {
+      const counts = await getCuisineCountsAction(selectedIngredients);
+      setCuisineCounts(counts);
+      setStepState(2);
+      syncUrl(2, selectedIngredients, selectedCuisines);
+    });
+  }, [selectedIngredients, selectedCuisines, syncUrl]);
+
+  // Step 2 → 3: 레시피 검색을 서버에서 수행 (recipes.json 서버 격리)
+  const goToStep3 = useCallback(() => {
+    startTransition(async () => {
+      const searchResults = await searchRecipesAction({
+        ingredients: selectedIngredients,
+        cuisines: selectedCuisines,
+      });
+      setResults(searchResults);
+      setStepState(3);
+      syncUrl(3, selectedIngredients, selectedCuisines);
+    });
+  }, [selectedIngredients, selectedCuisines, syncUrl]);
+
+  // 이전 Step으로 이동
+  const setStep = useCallback(
+    (nextStep: Step) => {
+      setStepState(nextStep);
+      syncUrl(nextStep, selectedIngredients, selectedCuisines);
+    },
+    [selectedIngredients, selectedCuisines, syncUrl],
+  );
+
+  // 초기 진입 시 step=3이면 서버 검색 자동 실행
+  useEffect(() => {
+    const initStep = parseStepParam(searchParams.get("step"));
+    if (initStep === 3) {
+      const initIngredients = parseIngredientsParam(searchParams.get("ingredients"));
+      const initCuisines = parseCuisinesParam(searchParams.get("cuisines"));
+      startTransition(async () => {
+        const [counts, searchResults] = await Promise.all([
+          getCuisineCountsAction(initIngredients),
+          searchRecipesAction({ ingredients: initIngredients, cuisines: initCuisines }),
+        ]);
+        setCuisineCounts(counts);
+        setResults(searchResults);
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 마운트 시 1회만
 
   // 재료 토글
   const toggleIngredient = useCallback((ingredient: string) => {
@@ -447,9 +543,11 @@ export default function HomePage() {
                   레시피 결과
                 </h1>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {results.length > 0
-                    ? `${results.length}개 레시피를 찾았어요`
-                    : "조건에 맞는 레시피가 없어요"}
+                  {isPending
+                    ? "검색 중..."
+                    : results.length > 0
+                      ? `${results.length}개 레시피를 찾았어요`
+                      : "조건에 맞는 레시피가 없어요"}
                 </p>
               </div>
               <button
@@ -464,7 +562,12 @@ export default function HomePage() {
               </button>
             </div>
 
-            {results.length === 0 ? (
+            {isPending ? (
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 py-16 dark:border-gray-700">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand border-t-transparent" />
+                <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">레시피를 찾고 있어요...</p>
+              </div>
+            ) : results.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 py-16 dark:border-gray-700">
                 <span className="text-5xl" role="img" aria-label="냄비">🍳</span>
                 <p className="mt-4 text-base font-semibold text-gray-600 dark:text-gray-400">
@@ -495,13 +598,20 @@ export default function HomePage() {
           {step === 1 && (
             <button
               type="button"
-              onClick={() => setStep(2)}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-4 text-base font-bold text-white transition-colors hover:bg-brand-hover active:scale-[0.98]"
+              onClick={goToStep2}
+              disabled={isPending}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-4 text-base font-bold text-white transition-colors hover:bg-brand-hover active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              다음
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-              </svg>
+              {isPending ? (
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              ) : (
+                <>
+                  다음
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                  </svg>
+                </>
+              )}
             </button>
           )}
 
@@ -510,7 +620,8 @@ export default function HomePage() {
               <button
                 type="button"
                 onClick={() => setStep(1)}
-                className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-5 py-4 text-base font-bold text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                disabled={isPending}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-5 py-4 text-base font-bold text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 disabled:opacity-70"
               >
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
@@ -519,14 +630,20 @@ export default function HomePage() {
               </button>
               <button
                 type="button"
-                onClick={() => setStep(3)}
-                disabled={selectedCuisines.length === 0}
+                onClick={goToStep3}
+                disabled={selectedCuisines.length === 0 || isPending}
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand py-4 text-base font-bold text-white transition-colors hover:bg-brand-hover active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                레시피 보기
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                </svg>
+                {isPending ? (
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                ) : (
+                  <>
+                    레시피 보기
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </>
+                )}
               </button>
             </div>
           )}
@@ -535,7 +652,8 @@ export default function HomePage() {
             <button
               type="button"
               onClick={() => setStep(2)}
-              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white py-4 text-base font-bold text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              disabled={isPending}
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white py-4 text-base font-bold text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 disabled:opacity-70"
             >
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
@@ -546,5 +664,14 @@ export default function HomePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** useSearchParams 사용을 위한 Suspense 래퍼 */
+export default function HomePage() {
+  return (
+    <Suspense>
+      <HomePageInner />
+    </Suspense>
   );
 }
