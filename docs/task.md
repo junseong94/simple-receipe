@@ -30,30 +30,30 @@
 
 | # | 태스크 | 담당 | 상태 | 비고 |
 |---|--------|------|------|------|
-| 9 | `data/ingredients.json` — 200+ 재료, 동의어, 카테고리 | fullstack | TODO | meat/seafood/vegetable/dairy/grain/seasoning/pantry |
-| 10 | `lib/ingredients/pantry.ts` — 기본 양념 목록 | fullstack | TODO | 기본조미료 + 한식 + 양식/일식/중식 + 공통 |
-| 11 | `lib/ingredients/synonyms.ts` — 동의어 그룹 매핑 | fullstack | TODO | 삼겹살=돼지삼겹살=삼겹 등 |
-| 12 | `lib/ingredients/normalize.ts` — 정규화 함수 | fullstack | TODO | 공백제거, 트림 |
+| 9 | `data/ingredients.json` — 200+ 재료, 동의어, 카테고리 | fullstack | DONE | 202개 재료, alias 충돌 해결 완료 |
+| 10 | `lib/ingredients/pantry.ts` — 기본 양념 목록 | fullstack | DONE | 16개 pantry staple + isPantryStaple() |
+| 11 | `lib/ingredients/synonyms.ts` — 동의어 그룹 매핑 | fullstack | DONE | 싱글톤 Map, O(1) 조회 |
+| 12 | `lib/ingredients/normalize.ts` — 정규화 함수 | fullstack | DONE | 전각→반각, 공백압축, 트림 |
 
 ### 1-4. 레시피 데이터셋 구축
 
 | # | 태스크 | 담당 | 상태 | 비고 |
 |---|--------|------|------|------|
-| 13 | `data/recipes.json` — 한식 15~20개 | fullstack | TODO | 실제 YouTube URL 큐레이션 |
-| 14 | `data/recipes.json` — 중식 15~20개 | fullstack | TODO | |
-| 15 | `data/recipes.json` — 일식 15~20개 | fullstack | TODO | |
-| 16 | `data/recipes.json` — 양식 15~20개 | fullstack | TODO | |
-| 17 | 각 레시피 영상 기반 재료 + 조리순서 텍스트 요약 | fullstack | TODO | |
-| 18 | 썸네일 URL 자동 생성 | fullstack | TODO | img.youtube.com/vi/{videoId}/hqdefault.jpg |
+| 13 | `data/recipes.json` — 한식 20개 | fullstack | DONE | YouTube URL 큐레이션 완료 |
+| 14 | `data/recipes.json` — 중식 15개 | fullstack | DONE | |
+| 15 | `data/recipes.json` — 일식 15개 | fullstack | DONE | |
+| 16 | `data/recipes.json` — 양식 15개 | fullstack | DONE | |
+| 17 | 각 레시피 영상 기반 재료 + 조리순서 텍스트 요약 | fullstack | DONE | 65개 전체 작성 |
+| 18 | 썸네일 URL 자동 생성 | fullstack | DONE | hqdefault.jpg 형식 |
 
 ### 1-5. 핵심 로직 구현
 
 | # | 태스크 | 담당 | 상태 | 비고 |
 |---|--------|------|------|------|
-| 19 | `lib/recipes/scorer.ts` — 누락 재료 점수 알고리즘 | fullstack | TODO | 기본양념 제외, missingCount, matchRatio |
-| 20 | `lib/recipes/search.ts` — filterStaticRecipes, scoreRecipe | fullstack | TODO | |
-| 21 | `lib/supabase.ts` — Supabase 클라이언트 초기화 | fullstack | TODO | |
-| 22 | 검색 시나리오 테스트 — "삼겹살", "상추,참치,김치" | fullstack | TODO | Phase 1 완료 기준 |
+| 19 | `lib/recipes/scorer.ts` — 누락 재료 점수 알고리즘 | fullstack | DONE | 수량/단위 제거 후 매칭 |
+| 20 | `lib/recipes/search.ts` — filterStaticRecipes, scoreRecipe | fullstack | DONE | cuisine 필터 + 정렬 |
+| 21 | `lib/supabase.ts` — Supabase 클라이언트 초기화 | fullstack | DONE | 환경변수 없으면 null 반환 |
+| 22 | 검색 시나리오 테스트 — "삼겹살", "상추,참치,김치" | fullstack | DONE | 5개 시나리오 전부 통과 |
 
 ### Phase 1 코드 리뷰
 
