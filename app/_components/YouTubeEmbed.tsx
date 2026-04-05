@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 interface YouTubeEmbedProps {
   url: string;
   title?: string;
@@ -30,44 +32,55 @@ function extractVideoId(url: string): string | null {
 }
 
 export default function YouTubeEmbed({ url, title }: YouTubeEmbedProps) {
+  const [activated, setActivated] = useState(false);
   const videoId = extractVideoId(url);
 
   if (!videoId) {
     return (
-      <div className="flex aspect-video w-full items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800">
-        <div className="text-center">
-          <svg
-            className="mx-auto mb-2 h-10 w-10 text-gray-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M4 8h8a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4a2 2 0 012-2z"
-            />
-          </svg>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            동영상을 불러올 수 없습니다
-          </p>
+      <div className="flex aspect-video w-full items-center justify-center rounded-xl bg-gray-100 dark:bg-gray-800">
+        <p className="text-sm text-gray-500">영상을 불러올 수 없습니다</p>
+      </div>
+    );
+  }
+
+  if (!activated) {
+    return (
+      <div
+        className="relative aspect-video w-full cursor-pointer overflow-hidden rounded-xl bg-gray-100"
+        onClick={() => setActivated(true)}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
+          alt={title ?? "YouTube 동영상 썸네일"}
+          className="h-full w-full object-cover"
+        />
+        {/* 재생 버튼 오버레이 */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-600 shadow-lg">
+            <svg
+              className="ml-1 h-7 w-7 text-white"
+              fill="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </div>
         </div>
       </div>
     );
   }
 
-  const embedUrl = `https://www.youtube.com/embed/${videoId}`;
-
   return (
-    <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
+    <div className="relative aspect-video w-full overflow-hidden rounded-xl">
       <iframe
-        src={embedUrl}
+        src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
         title={title ?? "YouTube 동영상"}
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
         allowFullScreen
         loading="lazy"
+        referrerPolicy="strict-origin-when-cross-origin"
         className="absolute inset-0 h-full w-full"
       />
     </div>
