@@ -1,13 +1,17 @@
 "use client";
 
-import { useState, useCallback, useEffect, useTransition, Suspense } from "react";
+import { useState, useCallback, useEffect, useMemo, useTransition, Suspense } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import IngredientInput from "@/app/_components/IngredientInput";
 import YouTubeEmbed from "@/app/_components/YouTubeEmbed";
 import RecipeSummary from "@/app/_components/RecipeSummary";
 import MissingBadge from "@/app/_components/MissingBadge";
-import { searchRecipesAction, getCuisineCountsAction } from "@/app/actions";
+import {
+  searchRecipesAction,
+  getCuisineCountsAction,
+  getIngredientPopularity,
+} from "@/app/actions";
 import type { CuisineType, ScoredRecipe } from "@/lib/recipes/types";
 
 // ─── URL searchParams 파싱 유틸 ────────────────────────────────────────────────
@@ -84,8 +88,8 @@ const CUISINE_OPTIONS: {
   },
 ];
 
-// 카테고리별 인기 재료 (ingredients.json 기반)
-const INGREDIENT_CATEGORIES = [
+// 카테고리별 재료 — items는 런타임에 인기순 정렬되므로 mutable 배열로 정의
+const INGREDIENT_CATEGORIES: { label: string; items: string[] }[] = [
   {
     label: "육류",
     items: ["삼겹살", "닭가슴살", "소고기불고기", "베이컨", "닭다리", "햄", "소시지", "차돌박이"],
@@ -102,7 +106,10 @@ const INGREDIENT_CATEGORIES = [
     label: "기타",
     items: ["달걀", "라면", "떡볶이떡", "슬라이스치즈", "우유", "밥(쌀)", "파스타면", "당면"],
   },
-] as const;
+];
+
+/** 전체 재료 중 인기 상위 N개 집합 — "인기" 뱃지 표시 기준 */
+const POPULAR_BADGE_COUNT = 5;
 
 // 아코디언 좌측 컬러 바
 const CUISINE_ACCENT: Record<CuisineType, string> = {
@@ -184,10 +191,12 @@ function StepLabel({ currentStep }: { currentStep: Step }) {
 function IngredientToggleButton({
   label,
   selected,
+  isPopular,
   onClick,
 }: {
   label: string;
   selected: boolean;
+  isPopular: boolean;
   onClick: () => void;
 }) {
   return (
@@ -195,18 +204,25 @@ function IngredientToggleButton({
       type="button"
       onClick={onClick}
       className={[
-        "flex min-h-[48px] items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition-all duration-150",
+        "flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-xl border px-3 py-2 text-sm font-medium transition-all duration-150",
         selected
           ? "border-brand bg-brand text-white"
           : "border-gray-200 bg-white text-gray-700 hover:border-brand/50 hover:bg-blue-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-brand/50 dark:hover:bg-blue-900/20",
       ].join(" ")}
     >
-      {selected && (
-        <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-        </svg>
+      <span className="flex items-center gap-1.5">
+        {selected && (
+          <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+          </svg>
+        )}
+        {label}
+      </span>
+      {isPopular && !selected && (
+        <span className="text-[10px] font-semibold leading-none text-orange-500 dark:text-orange-400">
+          인기
+        </span>
       )}
-      {label}
     </button>
   );
 }
@@ -323,6 +339,8 @@ function HomePageInner() {
     japanese: 0,
     western: 0,
   });
+  // 재료 인기순 빈도 — 마운트 시 1회 로드, DB 미연결 시 빈 객체(폴백)
+  const [popularity, setPopularity] = useState<Record<string, number>>({});
 
   // URL 동기화 헬퍼
   const syncUrl = useCallback(
@@ -387,6 +405,36 @@ function HomePageInner() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 마운트 시 1회만
+
+  // 재료 인기순 데이터 로드 — DB 미연결 시 빈 객체 폴백 (에러는 action 내부에서 처리)
+  useEffect(() => {
+    getIngredientPopularity().then(setPopularity);
+  }, []);
+
+  // 카테고리별 items를 인기순으로 정렬한 파생값
+  // popularity가 빈 객체이면 기존 고정 순서 유지
+  const sortedCategories = useMemo(
+    () =>
+      INGREDIENT_CATEGORIES.map((cat) => ({
+        ...cat,
+        items: [...cat.items].sort(
+          (a, b) => (popularity[b] ?? 0) - (popularity[a] ?? 0),
+        ),
+      })),
+    [popularity],
+  );
+
+  // 전체 재료 중 인기 상위 N개 집합 — "인기" 뱃지 표시
+  const popularIngredients = useMemo(
+    () =>
+      new Set(
+        Object.entries(popularity)
+          .sort(([, a], [, b]) => b - a)
+          .slice(0, POPULAR_BADGE_COUNT)
+          .map(([name]) => name),
+      ),
+    [popularity],
+  );
 
   // 재료 토글
   const toggleIngredient = useCallback((ingredient: string) => {
@@ -454,8 +502,8 @@ function HomePageInner() {
               아래 버튼은 레시피에 자주 쓰이는 재료예요. 목록에 없는 재료는 하단에서 직접 입력할 수 있어요.
             </div>
 
-            {/* 카테고리별 재료 버튼 */}
-            {INGREDIENT_CATEGORIES.map((category) => (
+            {/* 카테고리별 재료 버튼 — 인기순 정렬 적용 */}
+            {sortedCategories.map((category) => (
               <section key={category.label}>
                 <h2 className="mb-2.5 text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500">
                   {category.label}
@@ -466,6 +514,7 @@ function HomePageInner() {
                       key={item}
                       label={item}
                       selected={selectedIngredients.includes(item)}
+                      isPopular={popularIngredients.has(item)}
                       onClick={() => toggleIngredient(item)}
                     />
                   ))}
