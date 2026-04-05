@@ -35,9 +35,7 @@ function extractParenthetical(input: string): {
  * 1. 양쪽 공백 제거 (trim)
  * 2. 내부 연속 공백을 단일 공백으로 압축
  * 3. 전각(full-width) 공백을 반각으로 변환
- * 4. 괄호 안의 내용이 있는 경우 표준 형태로 재조합
- *    - "(생)", "(신선)", "(생)것" 등 불필요한 품질 표기 제거
- *    - 그 외 괄호 내용은 유지
+ * 4. 내부 연속 공백을 단일 공백으로 압축
  *
  * @example
  * normalizeIngredient("  삼겹살 ")         // → "삼겹살"

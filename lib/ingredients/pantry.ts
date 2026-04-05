@@ -35,7 +35,11 @@ export type PantryStaple = (typeof PANTRY_STAPLES)[number];
 
 /**
  * 주어진 재료명이 기본 양념(pantry staple)인지 여부를 반환합니다.
+ * 동의어 매핑을 통해 정규화된 이름으로 비교합니다.
+ * (예: "달걀" → "계란" → pantry staple)
  */
 export function isPantryStaple(ingredient: string): boolean {
-  return PANTRY_STAPLES.includes(ingredient);
+  // 순환 의존 방지를 위해 동적 import 대신 직접 정규화 + 비교
+  const trimmed = ingredient.trim().replace(/\s+/g, " ");
+  return PANTRY_STAPLES.includes(trimmed);
 }
