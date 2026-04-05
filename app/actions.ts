@@ -54,22 +54,37 @@ export async function getIngredientPopularity(): Promise<
   Record<string, number>
 > {
   try {
-    const sql = `
-      SELECT ingredient, SUM(cnt)::int AS count
-      FROM (
-        SELECT unnest(ingredients) AS ingredient, 1 AS cnt
-        FROM recipes
-        UNION ALL
-        SELECT unnest(ingredients) AS ingredient, 1 AS cnt
-        FROM user_recipes
-      ) sub
+    // recipes 테이블은 항상 존재 — 기본 빈도 집계
+    const baseSql = `
+      SELECT unnest(ingredients) AS ingredient, COUNT(*)::int AS count
+      FROM recipes
       GROUP BY ingredient
       ORDER BY count DESC
     `;
-    const rows = await query<{ ingredient: string; count: number }>(sql);
-    return Object.fromEntries(rows.map((r) => [r.ingredient, r.count]));
+    const baseRows = await query<{ ingredient: string; count: number }>(baseSql);
+    const counts: Record<string, number> = {};
+    for (const r of baseRows) {
+      counts[r.ingredient] = r.count;
+    }
+
+    // user_recipes는 없을 수 있으므로 별도 try/catch
+    try {
+      const userSql = `
+        SELECT unnest(ingredients) AS ingredient, COUNT(*)::int AS count
+        FROM user_recipes
+        GROUP BY ingredient
+      `;
+      const userRows = await query<{ ingredient: string; count: number }>(userSql);
+      for (const r of userRows) {
+        counts[r.ingredient] = (counts[r.ingredient] ?? 0) + r.count;
+      }
+    } catch {
+      // user_recipes 테이블 미존재 시 무시 — recipes 데이터만 사용
+    }
+
+    return counts;
   } catch {
-    // DB 미연결 또는 쿼리 실패 시 빈 객체 반환 → 호출 측에서 고정 순서 폴백
+    // DB 미연결 시 빈 객체 반환 → 호출 측에서 고정 순서 폴백
     return {};
   }
 }

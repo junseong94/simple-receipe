@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useTransition, Suspense } from "react";
+import { useState, useCallback, useEffect, useMemo, useTransition, Suspense } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import IngredientInput from "@/app/_components/IngredientInput";
@@ -413,19 +413,27 @@ function HomePageInner() {
 
   // 카테고리별 items를 인기순으로 정렬한 파생값
   // popularity가 빈 객체이면 기존 고정 순서 유지
-  const sortedCategories = INGREDIENT_CATEGORIES.map((cat) => ({
-    ...cat,
-    items: [...cat.items].sort(
-      (a, b) => (popularity[b] ?? 0) - (popularity[a] ?? 0),
-    ),
-  }));
+  const sortedCategories = useMemo(
+    () =>
+      INGREDIENT_CATEGORIES.map((cat) => ({
+        ...cat,
+        items: [...cat.items].sort(
+          (a, b) => (popularity[b] ?? 0) - (popularity[a] ?? 0),
+        ),
+      })),
+    [popularity],
+  );
 
   // 전체 재료 중 인기 상위 N개 집합 — "인기" 뱃지 표시
-  const popularIngredients = new Set(
-    Object.entries(popularity)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, POPULAR_BADGE_COUNT)
-      .map(([name]) => name),
+  const popularIngredients = useMemo(
+    () =>
+      new Set(
+        Object.entries(popularity)
+          .sort(([, a], [, b]) => b - a)
+          .slice(0, POPULAR_BADGE_COUNT)
+          .map(([name]) => name),
+      ),
+    [popularity],
   );
 
   // 재료 토글
