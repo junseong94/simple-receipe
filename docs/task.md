@@ -12,19 +12,19 @@
 
 | # | 태스크 | 담당 | 상태 | 비고 |
 |---|--------|------|------|------|
-| 1 | `npm install @supabase/supabase-js bcryptjs zod` | fullstack | TODO | |
-| 2 | `npm install -D @types/bcryptjs` | fullstack | TODO | |
-| 3 | `next.config.ts` 업데이트 — images.remotePatterns (img.youtube.com, i.ytimg.com) | fullstack | TODO | |
-| 4 | `.env.local` 템플릿 생성 | fullstack | TODO | NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY |
-| 5 | `globals.css` 디자인 토큰 확장 — 프로토타입 색상 변수, 다크모드 변수 | fullstack | TODO | |
-| 6 | 빌드 확인 (`npm run build`) | fullstack | TODO | Phase 1-1 완료 기준 |
+| 1 | `npm install @supabase/supabase-js bcryptjs zod` | fullstack | DONE | |
+| 2 | `npm install -D @types/bcryptjs` | fullstack | DONE | |
+| 3 | `next.config.ts` 업데이트 — images.remotePatterns (img.youtube.com, i.ytimg.com) | fullstack | DONE | |
+| 4 | `.env.local` 템플릿 생성 | fullstack | DONE | .env.local.example로 생성 |
+| 5 | `globals.css` 디자인 토큰 확장 — 프로토타입 색상 변수, 다크모드 변수 | fullstack | DONE | 2-layer 패턴 (CSS변수 + @theme inline) |
+| 6 | 빌드 확인 (`npm run build`) | fullstack | DONE | Turbopack 1495ms |
 
 ### 1-2. TypeScript 인터페이스 정의
 
 | # | 태스크 | 담당 | 상태 | 비고 |
 |---|--------|------|------|------|
-| 7 | `lib/recipes/types.ts` — Recipe, ScoredRecipe, CuisineType, DifficultyType | fullstack | TODO | |
-| 8 | 재료 사전 타입 — Ingredient, IngredientDictionary | fullstack | TODO | types.ts 또는 별도 파일 |
+| 7 | `lib/recipes/types.ts` — Recipe, ScoredRecipe, CuisineType, DifficultyType | fullstack | DONE | |
+| 8 | 재료 사전 타입 — Ingredient, IngredientDictionary | fullstack | DONE | types.ts에 포함 |
 
 ### 1-3. 재료 사전 데이터 구축
 
