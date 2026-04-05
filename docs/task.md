@@ -69,26 +69,26 @@
 
 | # | 태스크 | 담당 | 상태 | 비고 |
 |---|--------|------|------|------|
-| 24 | `app/_components/ui/Button.tsx` | fullstack | TODO | variant, size, disabled, loading |
-| 25 | `app/_components/ui/Input.tsx` | fullstack | TODO | placeholder, error 상태 |
-| 26 | `app/_components/ui/Tag.tsx` | fullstack | TODO | pill, 삭제(X), 색상 variant |
-| 27 | `app/_components/ui/Card.tsx` | fullstack | TODO | 썸네일 + 콘텐츠, hover |
-| 28 | `app/_components/ui/Badge.tsx` | fullstack | TODO | 0=green, 1-2=yellow, 3=orange |
-| 29 | `app/_components/ui/Skeleton.tsx` | fullstack | TODO | 카드, 텍스트 스켈레톤 |
-| 30 | `app/_components/ui/Tabs.tsx` | fullstack | TODO | 전체/한식/중식/일식/양식 |
+| 24 | `app/_components/ui/Button.tsx` | fullstack | DONE | variant, size, loading, ARIA |
+| 25 | `app/_components/ui/Input.tsx` | fullstack | DONE | useId + aria-describedby |
+| 26 | `app/_components/ui/Tag.tsx` | fullstack | DONE | pill, 삭제(X), 4가지 variant |
+| 27 | `app/_components/ui/Card.tsx` | fullstack | DONE | role=button 조건부 |
+| 28 | `app/_components/ui/Badge.tsx` | fullstack | DONE | 0=green, 1-2=yellow, 3=orange |
+| 29 | `app/_components/ui/Skeleton.tsx` | fullstack | DONE | aria-busy 접근성 |
+| 30 | `app/_components/ui/Tabs.tsx` | fullstack | DONE | ARIA tablist + barrel export |
 
 ### 2-2. 도메인 컴포넌트
 
 | # | 태스크 | 담당 | 상태 | 비고 |
 |---|--------|------|------|------|
-| 31 | `IngredientInput.tsx` | fullstack | TODO | 태그입력, 자동완성, 최대20개, 중복무시, 인식불가 회색 |
-| 32 | `RecipeCard.tsx` | fullstack | TODO | 썸네일, 요리명, 카테고리뱃지, 누락재료 |
-| 33 | `RecipeGrid.tsx` | fullstack | TODO | 검색 결과 그리드, CuisineFilter 연동 |
-| 34 | `CuisineFilter.tsx` | fullstack | TODO | 전체/한중일양 탭, 즉시 필터링 |
-| 35 | `MissingBadge.tsx` | fullstack | TODO | 누락 수 + 목록 툴팁 |
-| 36 | `YouTubeEmbed.tsx` | fullstack | TODO | 반응형 16:9, URL→videoId 파싱 |
-| 37 | `RecipeSummary.tsx` | fullstack | TODO | 단계별 조리순서, 접기/펼치기 |
-| 38 | `ThemeToggle.tsx` | fullstack | TODO | 다크/라이트 전환, localStorage |
+| 31 | `IngredientInput.tsx` | fullstack | DONE | IME처리, 자동완성, 최대20개 |
+| 32 | `RecipeCard.tsx` | fullstack | DONE | next/image, 카테고리뱃지 |
+| 33 | `RecipeGrid.tsx` | fullstack | DONE | 반응형 1/2/3열, 빈상태 UI |
+| 34 | `CuisineFilter.tsx` | fullstack | DONE | 멀티선택, counts 표시 |
+| 35 | `MissingBadge.tsx` | fullstack | DONE | 색상분기, hover 툴팁 |
+| 36 | `YouTubeEmbed.tsx` | fullstack | DONE | 3패턴 파싱, fallback |
+| 37 | `RecipeSummary.tsx` | fullstack | DONE | steps 접기/펼치기 |
+| 38 | `ThemeToggle.tsx` | fullstack | DONE | localStorage + SSR 안전 |
 
 ### Phase 2 코드 리뷰
 
