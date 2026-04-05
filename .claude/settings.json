@@ -3,7 +3,13 @@
     "PostToolUse": [
       {
         "matcher": "Agent",
-        "command": "if echo \"$TOOL_INPUT\" | grep -q 'nextjs-fullstack-senior'; then echo '[Code Review Required] 풀스택 개발자 에이전트 작업이 완료되었습니다. senior-code-reviewer 에이전트로 변경된 코드에 대해 코드 리뷰를 수행하세요.'; fi"
+        "command": "if echo \"$TOOL_INPUT\" | grep -q 'nextjs-fullstack-senior'; then echo '[Code Review Required] 풀스택 개발자 에이전트 작업이 완료되었습니다. senior-code-reviewer 에이전트로 코드 리뷰를 수행하세요.'; fi"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "command": "if echo \"$TOOL_INPUT\" | grep -q 'git merge.*main'; then echo 'BLOCKED: main 머지는 사용자가 직접 수행합니다. 코드 리뷰 완료 후 사용자에게 머지 요청하세요.' && exit 1; fi"
       }
     ]
   }

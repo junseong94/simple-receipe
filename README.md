@@ -68,12 +68,22 @@ npm run build
 npm start
 ```
 
-### Vercel 배포
+### Vercel + Supabase 배포
 
+**환경 구성:**
+- 로컬 개발: Docker PostgreSQL (localhost:5433)
+- 운영 배포: Vercel (프론트) + Supabase (DB)
+
+**Supabase 설정:**
+1. [Supabase](https://supabase.com)에서 프로젝트 생성
+2. SQL Editor에서 `supabase/schema.sql` 실행
+3. SQL Editor에서 `scripts/seed.sql` 실행
+4. Settings → Database → Connection string (Transaction mode, port 6543) 복사
+
+**Vercel 배포:**
 1. [Vercel](https://vercel.com)에 GitHub 저장소를 연결합니다.
 2. **Environment Variables** 설정:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `DATABASE_URL` = Supabase connection string (`?sslmode=require` 포함)
 3. Deploy 버튼을 클릭합니다.
 
 ## 프로젝트 문서
