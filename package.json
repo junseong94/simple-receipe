@@ -10,7 +10,6 @@
     "db:seed": "npx tsx scripts/seed.ts"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.101.1",
     "bcryptjs": "^3.0.3",
     "next": "16.2.2",
     "pg": "^8.20.0",
