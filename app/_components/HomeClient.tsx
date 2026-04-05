@@ -1,41 +1,14 @@
 "use client";
 
-import { useState, useCallback, useEffect, useTransition, Suspense } from "react";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useState, useCallback, useTransition } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import IngredientInput from "@/app/_components/IngredientInput";
 import YouTubeEmbed from "@/app/_components/YouTubeEmbed";
 import RecipeSummary from "@/app/_components/RecipeSummary";
 import MissingBadge from "@/app/_components/MissingBadge";
+import ThemeToggle from "@/app/_components/ThemeToggle";
 import { searchRecipesAction, getCuisineCountsAction } from "@/app/actions";
 import type { CuisineType, ScoredRecipe } from "@/lib/recipes/types";
-
-// ─── URL searchParams 파싱 유틸 ────────────────────────────────────────────────
-
-const VALID_CUISINES: CuisineType[] = ["korean", "chinese", "japanese", "western"];
-const ALL_CUISINES: CuisineType[] = ["korean", "chinese", "japanese", "western"];
-
-function parseStepParam(raw: string | null): Step {
-  const n = Number(raw);
-  return n === 1 || n === 2 || n === 3 ? n : 1;
-}
-
-function parseIngredientsParam(raw: string | null): string[] {
-  if (!raw) return [];
-  return raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .slice(0, 20);
-}
-
-function parseCuisinesParam(raw: string | null): CuisineType[] {
-  if (!raw) return ALL_CUISINES;
-  const parsed = raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s): s is CuisineType => VALID_CUISINES.includes(s as CuisineType));
-  return parsed.length > 0 ? parsed : ALL_CUISINES;
-}
 
 // ─── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -193,6 +166,7 @@ function IngredientToggleButton({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={selected}
       className={[
         "flex min-h-[48px] items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition-all duration-150",
         selected
@@ -230,12 +204,10 @@ function RecipeAccordionItem({
       ].join(" ")}
     >
       {/* 헤더 (클릭 → 아코디언 토글) */}
-      <div
-        role="button"
-        tabIndex={0}
+      <button
+        type="button"
         onClick={() => setOpen((prev) => !prev)}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen((prev) => !prev); } }}
-        className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer"
+        className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50"
         aria-expanded={open}
       >
         {/* 순번 */}
@@ -277,7 +249,7 @@ function RecipeAccordionItem({
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
-      </div>
+      </button>
 
       {/* 아코디언 컨텐츠 */}
       {open && (
@@ -292,25 +264,82 @@ function RecipeAccordionItem({
   );
 }
 
-// ─── 메인 페이지 ───────────────────────────────────────────────────────────────
+/** 빈 상태 UI — 검색 결과 0개일 때 */
+function EmptyState({ onReset }: { onReset: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 px-6 py-16 text-center dark:border-gray-700">
+      {/* 냄비 아이콘 */}
+      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
+        <svg
+          className="h-8 w-8 text-gray-400 dark:text-gray-500"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+            d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"
+          />
+        </svg>
+      </div>
 
-/** useSearchParams를 사용하는 실제 컴포넌트 — Suspense 내부에서만 렌더됨 */
-function HomePageInner() {
+      <p className="text-base font-semibold text-gray-700 dark:text-gray-300">
+        선택한 재료로 만들 수 있는 레시피가 없어요
+      </p>
+      <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+        다른 재료를 추가해보세요
+      </p>
+
+      <button
+        type="button"
+        onClick={onReset}
+        className="mt-6 inline-flex items-center gap-2 rounded-xl border border-brand/30 bg-blue-50 px-4 py-2.5 text-sm font-medium text-brand transition-colors hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40"
+      >
+        <svg
+          className="h-4 w-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M12 4v16m8-8H4"
+          />
+        </svg>
+        재료 다시 선택하기
+      </button>
+    </div>
+  );
+}
+
+// ─── Props ────────────────────────────────────────────────────────────────────
+
+interface HomeClientProps {
+  initialStep: Step;
+  initialIngredients: string[];
+  initialCuisines: CuisineType[];
+}
+
+// ─── 메인 클라이언트 컴포넌트 ──────────────────────────────────────────────────
+
+export default function HomeClient({
+  initialStep,
+  initialIngredients,
+  initialCuisines,
+}: HomeClientProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
-  // URL searchParams에서 초기값 파싱 — 뒤로가기 시 상태 복원의 핵심
-  const [step, setStepState] = useState<Step>(() =>
-    parseStepParam(searchParams.get("step")),
-  );
-  const [selectedIngredients, setSelectedIngredients] = useState<string[]>(() =>
-    parseIngredientsParam(searchParams.get("ingredients")),
-  );
-  const [selectedCuisines, setSelectedCuisines] = useState<CuisineType[]>(() =>
-    parseCuisinesParam(searchParams.get("cuisines")),
-  );
+  const [step, setStep] = useState<Step>(initialStep);
+  const [selectedIngredients, setSelectedIngredients] = useState<string[]>(initialIngredients);
+  const [selectedCuisines, setSelectedCuisines] = useState<CuisineType[]>(initialCuisines);
   const [results, setResults] = useState<ScoredRecipe[]>([]);
   const [cuisineCounts, setCuisineCounts] = useState<Record<CuisineType, number>>({
     korean: 0,
@@ -319,7 +348,7 @@ function HomePageInner() {
     western: 0,
   });
 
-  // URL 동기화 헬퍼
+  // URL을 현재 상태와 동기화 — 뒤로가기 시 상태 복원의 핵심
   const syncUrl = useCallback(
     (nextStep: Step, ingredients: string[], cuisines: CuisineType[]) => {
       const params = new URLSearchParams();
@@ -333,17 +362,17 @@ function HomePageInner() {
     [router, pathname],
   );
 
-  // Step 1 → 2: cuisine 카운트를 서버에서 조회 (recipes.json 서버 격리)
+  // Step 1 → 2: cuisine 카운트를 서버에서 조회
   const goToStep2 = useCallback(() => {
     startTransition(async () => {
       const counts = await getCuisineCountsAction(selectedIngredients);
       setCuisineCounts(counts);
-      setStepState(2);
+      setStep(2);
       syncUrl(2, selectedIngredients, selectedCuisines);
     });
   }, [selectedIngredients, selectedCuisines, syncUrl]);
 
-  // Step 2 → 3: 레시피 검색을 서버에서 수행 (recipes.json 서버 격리)
+  // Step 2 → 3: 레시피 검색을 서버에서 수행
   const goToStep3 = useCallback(() => {
     startTransition(async () => {
       const searchResults = await searchRecipesAction({
@@ -351,37 +380,19 @@ function HomePageInner() {
         cuisines: selectedCuisines,
       });
       setResults(searchResults);
-      setStepState(3);
+      setStep(3);
       syncUrl(3, selectedIngredients, selectedCuisines);
     });
   }, [selectedIngredients, selectedCuisines, syncUrl]);
 
   // 이전 Step으로 이동
-  const setStep = useCallback(
+  const goToStep = useCallback(
     (nextStep: Step) => {
-      setStepState(nextStep);
+      setStep(nextStep);
       syncUrl(nextStep, selectedIngredients, selectedCuisines);
     },
     [selectedIngredients, selectedCuisines, syncUrl],
   );
-
-  // 초기 진입 시 step=3이면 서버 검색 자동 실행
-  useEffect(() => {
-    const initStep = parseStepParam(searchParams.get("step"));
-    if (initStep === 3) {
-      const initIngredients = parseIngredientsParam(searchParams.get("ingredients"));
-      const initCuisines = parseCuisinesParam(searchParams.get("cuisines"));
-      startTransition(async () => {
-        const [counts, searchResults] = await Promise.all([
-          getCuisineCountsAction(initIngredients),
-          searchRecipesAction({ ingredients: initIngredients, cuisines: initCuisines }),
-        ]);
-        setCuisineCounts(counts);
-        setResults(searchResults);
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 마운트 시 1회만
 
   // 재료 토글
   const toggleIngredient = useCallback((ingredient: string) => {
@@ -409,13 +420,16 @@ function HomePageInner() {
       {/* 헤더 */}
       <header className="sticky top-0 z-10 border-b border-gray-200 bg-white/95 backdrop-blur dark:border-gray-800 dark:bg-gray-950/95">
         <div className="mx-auto max-w-lg px-4 py-3">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl font-black tracking-tight text-brand">
-              레시피 보드
-            </span>
-            <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand">
-              BETA
-            </span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-black tracking-tight text-brand">
+                레시피 보드
+              </span>
+              <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand">
+                BETA
+              </span>
+            </div>
+            <ThemeToggle />
           </div>
           <ProgressIndicator currentStep={step} />
           <StepLabel currentStep={step} />
@@ -499,6 +513,7 @@ function HomePageInner() {
                     key={cuisine.key}
                     type="button"
                     onClick={() => toggleCuisine(cuisine.key)}
+                    aria-pressed={isSelected}
                     className={[
                       "relative flex flex-col items-start gap-1.5 rounded-2xl border-2 p-4 text-left transition-all duration-150",
                       isSelected
@@ -552,7 +567,7 @@ function HomePageInner() {
               </div>
               <button
                 type="button"
-                onClick={() => setStep(1)}
+                onClick={() => goToStep(1)}
                 className="mt-1 flex flex-shrink-0 items-center gap-1.5 rounded-xl border border-brand/30 bg-blue-50 px-3 py-2 text-sm font-medium text-brand transition-colors hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -568,15 +583,7 @@ function HomePageInner() {
                 <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">레시피를 찾고 있어요...</p>
               </div>
             ) : results.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 py-16 dark:border-gray-700">
-                <span className="text-5xl" role="img" aria-label="냄비">🍳</span>
-                <p className="mt-4 text-base font-semibold text-gray-600 dark:text-gray-400">
-                  선택한 재료로 만들 수 있는 레시피가 없습니다
-                </p>
-                <p className="mt-1 text-sm text-gray-400 dark:text-gray-500">
-                  재료를 더 추가하거나 카테고리를 바꿔보세요
-                </p>
-              </div>
+              <EmptyState onReset={() => goToStep(1)} />
             ) : (
               <div className="space-y-2.5">
                 {results.map((scored, index) => (
@@ -619,7 +626,7 @@ function HomePageInner() {
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => setStep(1)}
+                onClick={() => goToStep(1)}
                 disabled={isPending}
                 className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-5 py-4 text-base font-bold text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 disabled:opacity-70"
               >
@@ -651,7 +658,7 @@ function HomePageInner() {
           {step === 3 && (
             <button
               type="button"
-              onClick={() => setStep(2)}
+              onClick={() => goToStep(2)}
               disabled={isPending}
               className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white py-4 text-base font-bold text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 disabled:opacity-70"
             >
@@ -664,14 +671,5 @@ function HomePageInner() {
         </div>
       </div>
     </div>
-  );
-}
-
-/** useSearchParams 사용을 위한 Suspense 래퍼 */
-export default function HomePage() {
-  return (
-    <Suspense>
-      <HomePageInner />
-    </Suspense>
   );
 }

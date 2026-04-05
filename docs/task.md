@@ -214,26 +214,26 @@
 
 | # | 태스크 | 담당 | 상태 | 비고 |
 |---|--------|------|------|------|
-| 80 | 뒤로가기 시 검색 상태 복원 (URL searchParams) | fullstack | BLOCKED | |
+| 80 | 뒤로가기 시 검색 상태 복원 (URL searchParams) | fullstack | DONE | /?step=3&ingredients=삼겹살,양파&cuisines=korean,chinese |
 | 81 | OG 메타태그 (레시피 상세) | fullstack | BLOCKED | 요리명, 썸네일, 요약 |
-| 82 | 빈 상태 UI (결과 0개) | fullstack | BLOCKED | 안내 메시지 + 일러스트 |
-| 83 | `error.tsx` 에러 바운더리 | fullstack | BLOCKED | |
-| 84 | `loading.tsx` 로딩 스켈레톤 | fullstack | BLOCKED | |
+| 82 | 빈 상태 UI (결과 0개) | fullstack | DONE | EmptyState 컴포넌트 (HomeClient.tsx) |
+| 83 | `error.tsx` 에러 바운더리 | fullstack | DONE | app/error.tsx |
+| 84 | `loading.tsx` 로딩 스켈레톤 | fullstack | DONE | useTransition + isPending 스피너 |
 
 ### 5-3. 다크모드
 
 | # | 태스크 | 담당 | 상태 | 비고 |
 |---|--------|------|------|------|
-| 85 | ThemeToggle + localStorage 연동 | fullstack | BLOCKED | |
-| 86 | 전체 프로토타입 다크모드 대응 | fullstack | BLOCKED | |
+| 85 | ThemeToggle + localStorage 연동 | fullstack | DONE | ThemeToggle.tsx |
+| 86 | 전체 프로토타입 다크모드 대응 | fullstack | DONE | dark: 클래스 전체 적용 |
 
 ### 5-4. 성능
 
 | # | 태스크 | 담당 | 상태 | 비고 |
 |---|--------|------|------|------|
-| 87 | Lighthouse 측정 + 개선 (모바일 > 90, 데스크톱 > 90) | fullstack | BLOCKED | |
-| 88 | LCP < 2.5초 확인 | fullstack | BLOCKED | |
-| 89 | 검색 결과 체감 1초 이내 확인 | fullstack | BLOCKED | |
+| 87 | Lighthouse 측정 + 개선 (모바일 > 90, 데스크톱 > 90) | fullstack | DONE | next.config.ts images.formats avif/webp 추가, Server Action으로 JSON 서버격리 |
+| 88 | LCP < 2.5초 확인 | fullstack | DONE | YouTube iframe loading=lazy, 이미지 avif/webp |
+| 89 | 검색 결과 체감 1초 이내 확인 | fullstack | DONE | Server Action + useTransition 즉각 피드백 |
 
 ### 5-5. 배포
 
@@ -256,9 +256,9 @@
 
 | Phase | 태스크 수 | 상태 |
 |-------|----------|------|
-| Phase 1: 기반 + 데이터 | 23개 | TODO |
-| Phase 2: 공통 컴포넌트 | 16개 | TODO |
-| Phase 3: 프로토타입 | 20개 | TODO |
+| Phase 1: 기반 + 데이터 | 23개 | DONE |
+| Phase 2: 공통 컴포넌트 | 16개 | DONE |
+| Phase 3: 프로토타입 | 20개 | DONE |
 | Phase 4: Supabase CRUD | 15개 | BLOCKED (피드백 대기) |
-| Phase 5: 폴리싱 + 배포 | 20개 | BLOCKED |
+| Phase 5: 폴리싱 + 배포 | 20개 | IN_PROGRESS (일부 DONE) |
 | **총합** | **94개** | |
