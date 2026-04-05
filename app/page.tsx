@@ -201,10 +201,12 @@ function RecipeAccordionItem({
       ].join(" ")}
     >
       {/* 헤더 (클릭 → 아코디언 토글) */}
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50"
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen((prev) => !prev); } }}
+        className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer"
         aria-expanded={open}
       >
         {/* 순번 */}
@@ -246,7 +248,7 @@ function RecipeAccordionItem({
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
-      </button>
+      </div>
 
       {/* 아코디언 컨텐츠 */}
       {open && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface MissingBadgeProps {
   missingIngredients: string[];
@@ -12,6 +12,19 @@ export default function MissingBadge({
   missingCount,
 }: MissingBadgeProps) {
   const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // 모바일: 외부 클릭 시 툴팁 닫기
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("click", handleClick, { capture: true });
+    return () => document.removeEventListener("click", handleClick, { capture: true });
+  }, [open]);
 
   if (missingCount === 0) {
     return (
@@ -27,7 +40,7 @@ export default function MissingBadge({
       : "bg-orange-100 text-orange-800 hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:hover:bg-orange-900/50";
 
   return (
-    <div className="relative inline-block">
+    <div ref={ref} className="relative inline-block">
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}

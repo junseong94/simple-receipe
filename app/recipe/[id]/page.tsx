@@ -13,6 +13,10 @@ function findRecipe(id: string): Recipe | undefined {
   return (recipesData as Recipe[]).find((r) => r.id === id);
 }
 
+export async function generateStaticParams() {
+  return (recipesData as Recipe[]).map((r) => ({ id: r.id }));
+}
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
   const recipe = findRecipe(id);
