@@ -409,13 +409,21 @@ function HomePageInner() {
       {/* 헤더 */}
       <header className="sticky top-0 z-10 border-b border-gray-200 bg-white/95 backdrop-blur dark:border-gray-800 dark:bg-gray-950/95">
         <div className="mx-auto max-w-lg px-4 py-3">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl font-black tracking-tight text-brand">
-              레시피 보드
-            </span>
-            <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand">
-              BETA
-            </span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-black tracking-tight text-brand">
+                레시피 보드
+              </span>
+              <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand">
+                BETA
+              </span>
+            </div>
+            <a
+              href="/recipe/new"
+              className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-hover transition-colors"
+            >
+              레시피 등록
+            </a>
           </div>
           <ProgressIndicator currentStep={step} />
           <StepLabel currentStep={step} />
