@@ -8,11 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  getAllCanonicalNames,
-  ingredientMatches,
-  isKnownIngredient,
-} from "@/lib/ingredients/synonyms";
+import { getAllCanonicalNames } from "@/lib/ingredients/synonyms";
 import { normalizeIngredient } from "@/lib/ingredients/normalize";
 
 interface IngredientInputProps {
@@ -20,23 +16,42 @@ interface IngredientInputProps {
   onChange: (ingredients: string[]) => void;
   placeholder?: string;
   maxTags?: number;
+  /** 자동완성 후보 목록 (외부에서 주입 가능). 미제공 시 Server Action으로 로드 */
+  canonicalNames?: string[];
 }
 
 const MAX_SUGGESTIONS = 8;
 
-/** 입력 쿼리에 매칭되는 자동완성 후보를 반환합니다. */
-function getSuggestions(query: string): string[] {
+/** 로컬 동기 사전 기반 자동완성 후보 반환 */
+function getSuggestions(query: string, allNames: string[]): string[] {
   if (!query.trim()) return [];
   const normalized = normalizeIngredient(query);
-  const all = getAllCanonicalNames();
-  return all
+  return allNames
     .filter((name) => name.includes(normalized))
     .slice(0, MAX_SUGGESTIONS);
 }
 
-/** 이미 추가된 재료 중 중복 여부 확인 (동의어 기준) */
-function isDuplicate(existing: string[], candidate: string): boolean {
-  return existing.some((e) => ingredientMatches(e, candidate));
+/**
+ * 두 재료명이 동일한지 확인합니다.
+ * 로컬 canonicalMap 기준으로 정규화 비교를 수행합니다.
+ */
+function isSameIngredient(
+  a: string,
+  b: string,
+  canonicalMap: Map<string, string>,
+): boolean {
+  const na = canonicalMap.get(normalizeIngredient(a)) ?? normalizeIngredient(a);
+  const nb = canonicalMap.get(normalizeIngredient(b)) ?? normalizeIngredient(b);
+  return na === nb;
+}
+
+/** names 배열에서 정규화 이름 → 표준 이름 Map을 생성합니다 */
+function buildCanonicalMap(names: string[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const name of names) {
+    map.set(normalizeIngredient(name), name);
+  }
+  return map;
 }
 
 export default function IngredientInput({
@@ -44,6 +59,7 @@ export default function IngredientInput({
   onChange,
   placeholder = "재료를 입력하세요 (Enter 또는 콤마로 추가)",
   maxTags = 20,
+  canonicalNames: externalNames,
 }: IngredientInputProps) {
   const [inputValue, setInputValue] = useState("");
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -51,23 +67,60 @@ export default function IngredientInput({
   const [dropdownOpen, setDropdownOpen] = useState(true);
   // 한글 IME 조합 중 여부
   const [isComposing, setIsComposing] = useState(false);
+  // externalNames가 없을 때 비동기 로드된 이름 목록
+  const [loadedNames, setLoadedNames] = useState<string[]>([]);
+
+  // props가 있으면 props를 사용, 없으면 비동기 로드된 목록 사용
+  const allNames = externalNames ?? loadedNames;
+
+  // allNames에서 파생된 canonicalMap (useMemo로 동기 계산)
+  const canonicalMap = useMemo(() => buildCanonicalMap(allNames), [allNames]);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const listboxId = useId();
   const isAtMax = ingredients.length >= maxTags;
 
+  // externalNames props가 없을 때만 Server Action으로 비동기 로드
+  useEffect(() => {
+    if (externalNames !== undefined) return;
+
+    getAllCanonicalNames()
+      .then((names) => {
+        setLoadedNames(names);
+      })
+      .catch(() => {
+        // DB 미연결 상태에서도 입력 기능은 유지
+      });
+  }, [externalNames]);
+
   // 입력값에서 파생된 자동완성 후보 (렌더마다 동기 계산)
   const allSuggestions = useMemo(
-    () => getSuggestions(inputValue),
-    [inputValue],
+    () => getSuggestions(inputValue, allNames),
+    [inputValue, allNames],
   );
 
   // 드롭다운이 열려있고 후보가 있을 때만 표시
   const visibleSuggestions = dropdownOpen ? allSuggestions : [];
 
-  // inputValue가 바뀌면 드롭다운을 다시 열고 activeIndex 초기화
-  // (useEffect 없이 이벤트 핸들러에서 직접 처리)
+  /** 이미 추가된 재료 중 중복 여부 확인 */
+  const isDuplicate = useCallback(
+    (candidate: string): boolean => {
+      return ingredients.some((e) =>
+        isSameIngredient(e, candidate, canonicalMap),
+      );
+    },
+    [ingredients, canonicalMap],
+  );
+
+  /** 재료가 사전에 등록된 것인지 확인 */
+  const isKnown = useCallback(
+    (ingredient: string): boolean => {
+      const normalized = normalizeIngredient(ingredient);
+      return canonicalMap.has(normalized);
+    },
+    [canonicalMap],
+  );
 
   /** 태그 추가 — 중복·최대 개수·빈 문자열 방어 */
   const addTag = useCallback(
@@ -75,14 +128,14 @@ export default function IngredientInput({
       const value = raw.trim();
       if (!value) return;
       if (isAtMax) return;
-      if (isDuplicate(ingredients, value)) return;
+      if (isDuplicate(value)) return;
 
       onChange([...ingredients, value]);
       setInputValue("");
       setActiveIndex(-1);
       setDropdownOpen(true);
     },
-    [ingredients, isAtMax, onChange],
+    [ingredients, isAtMax, isDuplicate, onChange],
   );
 
   /** 마지막 태그 삭제 */
@@ -191,7 +244,7 @@ export default function IngredientInput({
       >
         {/* 태그 목록 */}
         {ingredients.map((ingredient, index) => {
-          const known = isKnownIngredient(ingredient);
+          const known = isKnown(ingredient);
           return (
             <span
               key={`${ingredient}-${index}`}

@@ -1,83 +1,72 @@
-import ingredientData from "@/data/ingredients.json";
+"use server";
+
+import { query } from "@/lib/db/client";
 import { normalizeIngredient } from "./normalize";
 
 /**
- * 동의어 맵 타입: 동의어(또는 원래 이름) → 정규화된 표준 이름
+ * 동의어 맵: 정규화된 입력 → 정규화된 표준 이름
+ * DB에서 한 번 로드 후 모듈 스코프에서 캐싱합니다.
  */
-type SynonymMap = Map<string, string>;
+let cachedMap: Map<string, string> | null = null;
 
-/**
- * ingredients.json 데이터를 기반으로 동의어 맵을 구성합니다.
- *
- * 구성 규칙:
- * - 재료의 name 자체도 맵에 등록합니다 (자기 자신을 정규화 이름으로).
- * - aliases에 있는 모든 이름도 맵에 등록합니다.
- * - 모든 키/값은 normalizeIngredient()를 통해 정규화된 상태로 저장됩니다.
- */
-function buildSynonymMap(): SynonymMap {
-  const map: SynonymMap = new Map();
+async function buildSynonymMap(): Promise<Map<string, string>> {
+  if (cachedMap) return cachedMap;
 
-  for (const ingredient of ingredientData.ingredients) {
-    const canonicalName = normalizeIngredient(ingredient.name);
+  const rows = await query<{ name: string; aliases: string[] }>(
+    "SELECT name, aliases FROM ingredients",
+  );
 
-    // 표준 이름 자체 등록
-    map.set(canonicalName, canonicalName);
-
-    // 동의어 등록
-    for (const alias of ingredient.aliases) {
-      const normalizedAlias = normalizeIngredient(alias);
-      // 이미 다른 표준 이름으로 등록된 경우 덮어쓰지 않음
-      // (첫 번째 등록을 우선시)
-      if (!map.has(normalizedAlias)) {
-        map.set(normalizedAlias, canonicalName);
+  const map = new Map<string, string>();
+  for (const { name, aliases } of rows) {
+    const canonical = normalizeIngredient(name);
+    map.set(canonical, canonical);
+    for (const alias of aliases) {
+      const normalized = normalizeIngredient(alias);
+      if (!map.has(normalized)) {
+        map.set(normalized, canonical);
       }
     }
   }
 
+  cachedMap = map;
   return map;
 }
-
-// 모듈 레벨에서 한 번만 빌드 (싱글톤 패턴)
-const synonymMap: SynonymMap = buildSynonymMap();
 
 /**
  * 입력된 재료명에 대응하는 표준(정규화) 이름을 반환합니다.
  *
  * @example
- * getSynonymGroup("돼지삼겹살") // → "삼겹살"
- * getSynonymGroup("참치캔")    // → "참치"
- * getSynonymGroup("모르는재료") // → "모르는재료" (정규화만 적용)
+ * await getSynonymGroup("돼지삼겹살") // → "삼겹살"
+ * await getSynonymGroup("참치캔")    // → "참치"
  */
-export function getSynonymGroup(input: string): string {
+export async function getSynonymGroup(input: string): Promise<string> {
+  const map = await buildSynonymMap();
   const normalized = normalizeIngredient(input);
-  return synonymMap.get(normalized) ?? normalized;
+  return map.get(normalized) ?? normalized;
 }
 
 /**
  * 두 재료명이 같은 재료(또는 동의어)인지 여부를 반환합니다.
- *
- * @example
- * ingredientMatches("삼겹살", "돼지삼겹살") // → true
- * ingredientMatches("소금", "설탕")          // → false
  */
-export function ingredientMatches(a: string, b: string): boolean {
-  return getSynonymGroup(a) === getSynonymGroup(b);
+export async function ingredientMatches(a: string, b: string): Promise<boolean> {
+  return (await getSynonymGroup(a)) === (await getSynonymGroup(b));
 }
 
 /**
  * 동의어 맵에 등록된 모든 표준 이름 목록을 반환합니다.
  */
-export function getAllCanonicalNames(): string[] {
-  return ingredientData.ingredients.map((ingredient) =>
-    normalizeIngredient(ingredient.name),
-  );
+export async function getAllCanonicalNames(): Promise<string[]> {
+  const map = await buildSynonymMap();
+  // map에서 canonical(value) 값만 중복 없이 수집
+  return [...new Set(map.values())];
 }
 
 /**
  * 입력된 재료명이 사전에 등록된 재료인지 여부를 반환합니다.
  * (동의어 포함)
  */
-export function isKnownIngredient(input: string): boolean {
+export async function isKnownIngredient(input: string): Promise<boolean> {
+  const map = await buildSynonymMap();
   const normalized = normalizeIngredient(input);
-  return synonymMap.has(normalized);
+  return map.has(normalized);
 }

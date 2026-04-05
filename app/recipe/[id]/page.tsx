@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
-import recipesData from "@/data/recipes.json";
+import { query } from "@/lib/db/client";
+import { rowToRecipe } from "@/lib/db/transform";
 import type { Recipe } from "@/lib/recipes/types";
-import { supabase } from "@/lib/supabase";
 import YouTubeEmbed from "@/app/_components/YouTubeEmbed";
 import RecipeSummary from "@/app/_components/RecipeSummary";
 import RecipeActions from "./RecipeActions";
@@ -16,61 +16,26 @@ const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * 큐레이션 정적 JSON에서 레시피를 찾습니다.
- */
-function findCuratedRecipe(id: string): Recipe | undefined {
-  return (recipesData as Recipe[]).find((r) => r.id === id);
-}
-
-/**
- * Supabase user_recipes 행을 도메인 Recipe 타입으로 변환합니다.
- */
-function rowToRecipe(row: Record<string, unknown>): Recipe {
-  return {
-    id: row.id as string,
-    name: row.name as string,
-    cuisine: row.cuisine as Recipe["cuisine"],
-    difficulty: row.difficulty as Recipe["difficulty"],
-    cookTime: (row.cook_time as string) ?? "",
-    servings: (row.servings as number) ?? 2,
-    ingredients: (row.ingredients as string[]) ?? [],
-    seasonings: (row.seasonings as string[]) ?? [],
-    steps: (row.steps as string[]) ?? [],
-    youtubeUrl: (row.youtube_url as string) ?? "",
-    youtubeTitle: (row.youtube_title as string) ?? "",
-    channelName: (row.channel_name as string) ?? "",
-    thumbnailUrl: (row.thumbnail_url as string) ?? "",
-    summary: (row.summary as string) ?? "",
-    source: "user",
-  };
-}
-
-/**
  * id 형식에 따라 레시피를 조회합니다.
- * - UUID 형식 → Supabase user_recipes 조회
- * - 그 외 → 정적 JSON 조회
+ * - UUID 형식 → user_recipes 테이블 조회
+ * - 그 외 → recipes 테이블(큐레이션) 조회
  */
 async function findRecipe(id: string): Promise<Recipe | undefined> {
   if (UUID_REGEX.test(id)) {
-    // 사용자 레시피 조회
-    if (!supabase) return undefined;
-    const { data, error } = await supabase
-      .from("user_recipes")
-      .select(
-        "id, author_name, name, cuisine, difficulty, cook_time, servings, ingredients, seasonings, steps, youtube_url, youtube_title, channel_name, thumbnail_url, summary",
-      )
-      .eq("id", id)
-      .single();
-    if (error || !data) return undefined;
-    return rowToRecipe(data as Record<string, unknown>);
+    const rows = await query<Record<string, unknown>>(
+      "SELECT *, 'user' AS source FROM user_recipes WHERE id = $1",
+      [id],
+    );
+    if (rows.length === 0) return undefined;
+    return rowToRecipe(rows[0]);
   }
 
-  // 큐레이션 레시피 조회
-  return findCuratedRecipe(id);
-}
-
-export async function generateStaticParams() {
-  return (recipesData as Recipe[]).map((r) => ({ id: r.id }));
+  const rows = await query<Record<string, unknown>>(
+    "SELECT * FROM recipes WHERE id = $1",
+    [id],
+  );
+  if (rows.length === 0) return undefined;
+  return rowToRecipe(rows[0]);
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
