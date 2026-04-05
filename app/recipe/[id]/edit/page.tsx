@@ -1,35 +1,13 @@
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { pool } from "@/lib/db/client";
+import { rowToRecipe } from "@/lib/db/transform";
 import type { Recipe } from "@/lib/recipes/types";
 import EditRecipeFormClient from "./EditRecipeFormClient";
 
 interface PageProps {
   params: Promise<{ id: string }>;
-}
-
-/**
- * Supabase user_recipes 행을 도메인 Recipe 타입으로 변환합니다.
- */
-function rowToRecipe(row: Record<string, unknown>): Recipe {
-  return {
-    id: row.id as string,
-    name: row.name as string,
-    cuisine: row.cuisine as Recipe["cuisine"],
-    difficulty: row.difficulty as Recipe["difficulty"],
-    cookTime: (row.cook_time as string) ?? "",
-    servings: (row.servings as number) ?? 2,
-    ingredients: (row.ingredients as string[]) ?? [],
-    seasonings: (row.seasonings as string[]) ?? [],
-    steps: (row.steps as string[]) ?? [],
-    youtubeUrl: (row.youtube_url as string) ?? "",
-    youtubeTitle: (row.youtube_title as string) ?? "",
-    channelName: (row.channel_name as string) ?? "",
-    thumbnailUrl: (row.thumbnail_url as string) ?? "",
-    summary: (row.summary as string) ?? "",
-    source: "user",
-  };
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -50,25 +28,23 @@ export default async function EditRecipePage({ params }: PageProps) {
     notFound();
   }
 
-  // Supabase 미설정 시 등록 페이지로 안내
-  if (!isSupabaseConfigured() || !supabase) {
+  // DB 미설정 시 등록 페이지로 안내
+  if (!process.env.DATABASE_URL) {
     redirect("/recipe/new");
   }
 
-  const { data: row, error } = await supabase
-    .from("user_recipes")
-    .select(
-      "id, author_name, name, cuisine, difficulty, cook_time, servings, ingredients, seasonings, steps, youtube_url, youtube_title, channel_name, thumbnail_url, summary",
-    )
-    .eq("id", id)
-    .single();
+  const { rows } = await pool.query(
+    "SELECT id, author_name, name, cuisine, difficulty, cook_time, servings, ingredients, seasonings, steps, youtube_url, youtube_title, channel_name, thumbnail_url, summary FROM user_recipes WHERE id = $1",
+    [id],
+  );
 
-  if (error || !row) {
+  if (rows.length === 0) {
     notFound();
   }
 
-  const recipe = rowToRecipe(row as Record<string, unknown>);
-  const authorName = (row as Record<string, unknown>).author_name as string ?? "";
+  const row = rows[0] as Record<string, unknown>;
+  const recipe = rowToRecipe(row);
+  const authorName = (row.author_name as string) ?? "";
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50 dark:bg-gray-950">

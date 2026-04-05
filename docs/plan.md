@@ -323,3 +323,54 @@ Sprint 2-3 (인기순) ← Sprint 2-2 이후 권장
 
 > Sprint 1의 5개 태스크는 모두 독립적이므로 병렬 워크트리로 동시 진행 가능.
 > Sprint 2-1(PC 레이아웃)은 Sprint 1의 YouTube 수정(1-3)이 완료된 후 진행 권장.
+
+---
+
+## v1.2 DB 아키텍처 변경 — PostgreSQL Docker 통합
+
+> 기준 문서: [specification.md v1.2](./specification.md)
+> 변경: JSON + Supabase → 로컬 PostgreSQL Docker 컨테이너 단일화
+
+### DB Phase 1: 인프라 준비 (약 1시간)
+- [ ] `docker-compose.yml` 작성 (postgres:15-alpine, 볼륨, 포트 5432)
+- [ ] `supabase/schema.sql` 확장 (recipes, ingredients 테이블 추가)
+- [ ] `scripts/seed.ts` 작성 (JSON → DB 마이그레이션)
+- [ ] `package.json`에 `db:seed` 스크립트 추가
+- [ ] `.env.local` 업데이트 (DATABASE_URL)
+- [ ] 컨테이너 기동 + seed 실행 검증
+
+### DB Phase 2: DB 연결 레이어 (약 2시간)
+- [ ] `npm install pg @types/pg`
+- [ ] `lib/db/client.ts` — pg Pool 클라이언트
+- [ ] `lib/db/transform.ts` — snake_case → camelCase 변환 (toCamelCase)
+- [ ] `.env.local.example` 업데이트
+
+### DB Phase 3: 검색 로직 교체 (약 3시간)
+- [ ] `lib/recipes/search.ts` — JSON import → DB 쿼리
+- [ ] `lib/ingredients/dictionary.ts` — 재료 사전 DB 조회
+- [ ] `lib/ingredients/synonyms.ts` — JSON import → DB 데이터 기반
+- [ ] `app/_components/IngredientInput.tsx` — JSON → Server Action
+- [ ] `app/_components/HomeClient.tsx` — 검색을 Server Action으로 전환
+- [ ] `app/recipe/[id]/page.tsx` — JSON lookup → DB 쿼리
+
+### DB Phase 4: 사용자 레시피 CRUD 교체 (약 2시간)
+- [ ] `app/recipe/new/actions.ts` — Supabase → pg 쿼리
+- [ ] `app/recipe/[id]/edit/actions.ts` — Supabase → pg 쿼리
+- [ ] `app/recipe/[id]/actions.ts` — Supabase → pg 쿼리
+- [ ] `app/recipe/[id]/RecipeActions.tsx` — Supabase 참조 제거
+
+### DB Phase 5: 정리 (약 1시간)
+- [ ] `lib/supabase.ts` 삭제
+- [ ] `npm uninstall @supabase/supabase-js`
+- [ ] `data/*.json` import 구문 전부 제거 (파일은 seed 소스로 보관)
+- [ ] `.env.local.example` Supabase 키 제거
+- [ ] `npx tsc --noEmit` + `npm run build` 검증
+
+### 의존성 그래프
+```
+DB Phase 1 (인프라) → DB Phase 2 (연결 레이어) → DB Phase 3 (검색 교체)
+                                                 → DB Phase 4 (CRUD 교체)
+                                                       ↓
+                                                 DB Phase 5 (정리)
+```
+> Phase 3과 4는 Phase 2 완료 후 병렬 가능.

@@ -1,0 +1,18 @@
+version: "3.9"
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: simple_recipe_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: simple_recipe
+      POSTGRES_USER: recipe_user
+      POSTGRES_PASSWORD: recipe_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./supabase/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+      - ./scripts/seed.sql:/docker-entrypoint-initdb.d/02_seed.sql
+volumes:
+  postgres_data:
