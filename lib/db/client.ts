@@ -11,8 +11,11 @@ function createPool(): Pool {
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL 환경변수가 설정되지 않았습니다.");
   }
+  const isProduction = process.env.NODE_ENV === "production";
   return new Pool({
     connectionString: process.env.DATABASE_URL,
+    // 프로덕션(Supabase)은 SSL 필수, 로컬 Docker는 불필요
+    ssl: isProduction ? { rejectUnauthorized: false } : false,
   });
 }
 
